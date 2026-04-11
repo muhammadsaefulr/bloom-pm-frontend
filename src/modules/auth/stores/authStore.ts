@@ -1,10 +1,52 @@
 import { writable, derived, type Readable } from 'svelte/store';
-import type { AuthSession, User, Tokens } from '../types/index.js';
+import type { AuthSession, User, Tokens, Team, UserSettings } from '../types/index.js';
 
-const initialSession: AuthSession | null = null;
+const STORAGE_KEY = 'bloom_pm_ui_settings';
+
+// Load initial state from localStorage if in browser
+function loadStoredState(): Partial<AuthSession> | null {
+    if (typeof window === 'undefined') return null;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+        try {
+            return JSON.parse(stored);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+}
+
+function saveStoredState(session: AuthSession | null) {
+    if (typeof window === 'undefined') return;
+    if (!session || !session.user) {
+        localStorage.removeItem(STORAGE_KEY);
+        return;
+    }
+    // Only save non-sensitive UI settings/appearance, skip tokens completely
+    const dataToSave = {
+        user: session.user, // Persist user appearance (name, email, avatar, etc)
+        selectedTeam: session.selectedTeam || null,
+        settings: session.settings || { theme: 'light', language: 'en' },
+        isAuthenticated: session.isAuthenticated
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+}
+
+const storedState = loadStoredState();
+const initialSession: AuthSession | null = storedState
+    ? {
+        ...storedState,
+        tokens: undefined, // ensure no sensitive access tokens are loaded from local storage
+        isAuthenticated: !!storedState.user
+    } as AuthSession
+    : null;
 
 function createAuthStore() {
     const { subscribe, set, update } = writable<AuthSession | null>(initialSession);
+
+    // Save to local storage on every change to the store
+    subscribe(saveStoredState);
 
     return {
         subscribe,
@@ -14,12 +56,18 @@ function createAuthStore() {
         },
 
         login: (user: User, tokens?: Tokens) => {
-            const session: AuthSession = {
-                user,
-                tokens,
-                isAuthenticated: true,
-            };
-            set(session);
+            update(session => {
+                const selectedTeam = session?.selectedTeam ?? user?.teams?.[0] ?? null;
+                const settings = session?.settings ?? { theme: 'light', language: 'en', sidebarOpen: true };
+                return {
+                    ...session,
+                    user,
+                    tokens: tokens ?? session?.tokens,
+                    isAuthenticated: true,
+                    selectedTeam,
+                    settings
+                };
+            });
         },
 
         logout: () => {
@@ -45,6 +93,24 @@ function createAuthStore() {
                         ...session,
                         tokens,
                     };
+                }
+                return session;
+            });
+        },
+
+        setSelectedTeam: (team: Team | null) => {
+            update((session) => {
+                if (session) {
+                    return { ...session, selectedTeam: team };
+                }
+                return session;
+            });
+        },
+
+        updateSettings: (settings: Partial<UserSettings>) => {
+            update((session) => {
+                if (session) {
+                    return { ...session, settings: { ...(session.settings || { theme: 'light', language: 'en' }), ...settings } as UserSettings };
                 }
                 return session;
             });
@@ -113,4 +179,14 @@ export const isAuthenticated: Readable<boolean> = derived(
 export const accessToken: Readable<string | null> = derived(
     authStore,
     ($auth) => $auth?.tokens?.access?.token ?? null
+);
+
+export const selectedTeam: Readable<Team | null> = derived(
+    authStore,
+    ($auth) => $auth?.selectedTeam ?? null
+);
+
+export const userSettings: Readable<UserSettings | null> = derived(
+    authStore,
+    ($auth) => $auth?.settings ?? null
 );

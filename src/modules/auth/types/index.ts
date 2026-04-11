@@ -52,8 +52,10 @@ export interface TeamDetail {
 }
 
 export interface Team {
+    id: string;
     tenant_id: string;
     user_id: string;
+    role_id: number;
     created_at: string;
     updated_at: string;
     deleted_at: string | null;
@@ -71,7 +73,7 @@ export interface User {
     firebase_uid?: string;
     user_subscription?: UserSubscription;
     user_role?: UserRole;
-    teams?: Team;
+    teams?: Team[];
 }
 
 export interface LoginCredentials {
@@ -100,10 +102,18 @@ export interface RefreshTokenResponse extends BaseApiResponse {
     tokens: Tokens;
 }
 
+export interface UserSettings {
+    theme: 'light' | 'dark';
+    language: string;
+    sidebarOpen?: boolean;
+}
+
 export interface AuthSession {
     user: User;
     tokens?: Tokens;
     isAuthenticated: boolean;
+    selectedTeam?: Team | null;
+    settings?: UserSettings;
 }
 
 export type AuthError = ApiErrorResponse;

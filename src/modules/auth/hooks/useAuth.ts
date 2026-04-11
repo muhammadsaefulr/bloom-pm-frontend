@@ -23,10 +23,21 @@ export function useLogin() {
         mutationFn: async (credentials: LoginCredentials): Promise<AuthResponse> => {
             return await loginApi(credentials);
         },
-        onSuccess: (data: AuthResponse) => {
-            authStore.login(data.user, data.tokens);
+        onSuccess: async (data: AuthResponse) => {
+            authStore.updateTokens(data.tokens);
+            try {
+                const user = await getCurrentUserApi();
+                authStore.login(user, data.tokens);
+            } catch (err) {
+                // fallback
+                authStore.login(data.user, data.tokens);
+            }
             queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-            goto('/dashboard');
+            
+            const { get } = await import('svelte/store');
+            const { page } = await import('$app/stores');
+            const returnTo = get(page).url.searchParams.get("returnTo");
+            goto(returnTo || '/dashboard');
         },
         onError: (error: any) => {
             console.error('Login failed:', error.message);
@@ -41,10 +52,21 @@ export function useRegister() {
         mutationFn: async (credentials: RegisterCredentials): Promise<AuthResponse> => {
             return await registerApi(credentials);
         },
-        onSuccess: (data: AuthResponse) => {
-            authStore.login(data.user, data.tokens);
+        onSuccess: async (data: AuthResponse) => {
+            authStore.updateTokens(data.tokens);
+            try {
+                const user = await getCurrentUserApi();
+                authStore.login(user, data.tokens);
+            } catch (err) {
+                // fallback
+                authStore.login(data.user, data.tokens);
+            }
             queryClient.invalidateQueries({ queryKey: ['currentUser'] });
-            goto('/dashboard');
+            
+            const { get } = await import('svelte/store');
+            const { page } = await import('$app/stores');
+            const returnTo = get(page).url.searchParams.get("returnTo");
+            goto(returnTo || '/dashboard');
         },
         onError: (error: any) => {
             console.error('Registration failed:', error.message);

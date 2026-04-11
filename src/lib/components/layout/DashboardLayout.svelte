@@ -8,7 +8,7 @@
   <Sidebar />
 
   <main class="flex-1 min-w-0">
-    <div class="h-full px-8 py-6 overflow-y-auto w-full max-w-[1200px] mx-auto">
+    <div class="h-full px-8 py-6 overflow-y-auto w-full mx-auto">
       <slot />
     </div>
   </main>

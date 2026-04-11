@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/stores";
-  import { cn } from "$lib/utils/cn.ts";
+  import { cn } from "$lib/utils/cn";
+  import { slide } from "svelte/transition";
 
   export let href: string = "";
   export let label: string;
@@ -9,7 +10,8 @@
   export let onClick: (() => void) | undefined = undefined;
   export let isCollapsed: boolean = false;
 
-  $: isActive = active || ($page.url.pathname === href && href !== "#");
+  $: isActive =
+    active || (href !== "#" && ($page.url.pathname as string) === href);
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
@@ -18,7 +20,7 @@
   <a
     {href}
     class={cn(
-      "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-normal transition-all duration-150 group w-full",
+      "flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm font-normal transition-all duration-150 group w-full",
       "hover:bg-gray-100/80",
       isActive
         ? "bg-gray-100 text-gray-900"
@@ -27,6 +29,12 @@
     )}
     on:click={onClick}
   >
+    {#if label && !isCollapsed}
+      <span
+        transition:slide={{ axis: "x", duration: 300 }}
+        class="truncate whitespace-nowrap">{label}</span
+      >
+    {/if}
     {#if icon}
       <svelte:component
         this={icon}
@@ -38,15 +46,12 @@
         )}
       />
     {/if}
-    {#if label && !isCollapsed}
-      <span class="truncate">{label}</span>
-    {/if}
   </a>
 
   <!-- Tooltip for collapsed state -->
   {#if isCollapsed && label}
     <div
-      class="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg whitespace-nowrap opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50 pointer-events-none shadow-lg"
+      class="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 bg-gray-100 text-black text-xs font-medium rounded-lg whitespace-nowrap opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 z-50 pointer-events-none shadow-lg"
     >
       {label}
       <!-- Tooltip arrow -->

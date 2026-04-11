@@ -14,11 +14,17 @@
   } from "@lucide/svelte";
   import SidebarItem from "./SidebarItem.svelte";
   import ProfileDropdown from "./ProfileDropdown.svelte";
-  import { cn } from "$lib/utils/cn";
-  import { currentUser } from "$modules/auth/stores/authStore.js";
+  import {
+    currentUser,
+    userSettings,
+    authStore,
+  } from "$modules/auth/stores/authStore.js";
   import { useLogout } from "$modules/auth/hooks/useAuth.js";
+  import { slide, fade } from "svelte/transition";
+  // @ts-expect-error module resolution
+  import { cn } from "$lib/utils/cn.ts";
 
-  let isCollapsed = false;
+  $: isCollapsed = !($userSettings?.sidebarOpen ?? true);
   let isProfileOpen = false;
 
   const logout = useLogout();
@@ -26,9 +32,8 @@
   // Mock data based on the image
   const mainNav = [
     { label: "Home", href: "/dashboard", icon: Home },
-    { label: "New Chat", href: "#", icon: MessageSquarePlus },
-    { label: "Teams Chat", href: "#", icon: MessageCircleIcon },
-    { label: "My Tasks", href: "#", icon: CheckSquare },
+    { label: "Chat", href: "/chat", icon: MessageCircleIcon },
+    { label: "My Tasks", href: "/tasks", icon: CheckSquare },
     { label: "My Meetings", href: "#", icon: Video },
     { label: "Saved Files", href: "#", icon: FileText },
   ];
@@ -43,7 +48,7 @@
 
   function toggleProfile() {
     if (isCollapsed) {
-      isCollapsed = false;
+      authStore.updateSettings({ sidebarOpen: true });
     } else {
       isProfileOpen = !isProfileOpen;
     }
@@ -51,7 +56,7 @@
 
   function expandSidebar() {
     if (isCollapsed) {
-      isCollapsed = false;
+      authStore.updateSettings({ sidebarOpen: true });
     }
   }
 </script>
@@ -75,8 +80,12 @@
         class="w-9 h-9 rounded-full object-cover border border-gray-200"
       />
       {#if !isCollapsed}
-        <div class="flex flex-col items-start">
-          <span class="text-sm font-semibold text-gray-900 leading-tight"
+        <div
+          class="flex flex-col items-start"
+          transition:slide={{ axis: "x", duration: 300 }}
+        >
+          <span
+            class="text-sm font-semibold text-gray-900 leading-tight whitespace-nowrap"
             >{$currentUser?.name || "User"}</span
           >
         </div>
@@ -84,8 +93,9 @@
     </button>
     {#if !isCollapsed}
       <button
-        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors p-1.5 rounded-lg"
-        on:click={() => (isCollapsed = !isCollapsed)}
+        transition:fade={{ duration: 200 }}
+        class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors p-1.5 rounded-lg shrink-0"
+        on:click={() => authStore.updateSettings({ sidebarOpen: false })}
       >
         <ChevronsLeft class="w-4 h-4" />
       </button>
@@ -99,7 +109,7 @@
   />
 
   <!-- Main Navigation -->
-  <nav class="flex-1 overflow-y-auto space-y-6 scrollbar-hide">
+  <nav class="flex-1 overflow-visible space-y-6 scrollbar-hide">
     <!-- Primary Links -->
     <div class="space-y-0.5">
       {#each mainNav as item}
@@ -143,12 +153,11 @@
     {/if} -->
 
     <!-- AI Reports Warning Card -->
-    {#if !isCollapsed}
+    <!-- {#if !isCollapsed}
       <div
         class="mx-1 mt-4 p-4 bg-gray-50/80 rounded-2xl relative overflow-hidden"
       >
         <div class="flex items-start gap-3 mb-3">
-          <!-- Progress ring indicator -->
           <div class="relative w-5 h-5 shrink-0 mt-0.5">
             <svg class="w-5 h-5 transform -rotate-90" viewBox="0 0 20 20">
               <circle
@@ -187,11 +196,11 @@
           Upgrade Now
         </button>
       </div>
-    {/if}
+    {/if} -->
   </nav>
 
   <!-- Footer -->
-  <div class="mt-auto pt-3 border-t border-gray-100">
+  <div class="w-full mt-auto pt-3 border-t border-gray-100">
     <div class="flex items-center justify-between">
       <SidebarItem
         label="Settings"
@@ -199,13 +208,6 @@
         icon={Settings}
         {isCollapsed}
       />
-      {#if !isCollapsed}
-        <button
-          class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors mr-1"
-        >
-          <MoreHorizontal class="w-4 h-4" />
-        </button>
-      {/if}
     </div>
   </div>
 </aside>
