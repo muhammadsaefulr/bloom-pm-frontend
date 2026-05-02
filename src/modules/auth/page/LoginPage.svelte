@@ -5,7 +5,7 @@
   import { env } from "$env/dynamic/public";
 
   const authUrl = `${(
-    env.PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+    env.VITE_API_BASE_URL ?? "http://localhost:8000"
   ).replace(/\/$/, "")}/api/v1/auth/google`;
   let email = "";
   let password = "";
