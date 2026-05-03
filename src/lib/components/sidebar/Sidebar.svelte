@@ -68,10 +68,9 @@
   )}
 >
   <!-- Profile Header -->
-  <div class="flex items-center justify-between px-2 mb-6">
+  <div on:click={toggleProfile} class="flex items-center justify-between px-2 mb-6 hover:bg-gray-50 rounded-lg p-1.5 -ml-1.5 transition-colors">
     <button
-      class="flex items-center gap-3 hover:bg-gray-50 rounded-lg p-1.5 -ml-1.5 transition-colors"
-      on:click={toggleProfile}
+      class="flex items-center gap-3"
     >
       <img
         src={$currentUser?.avatar_url ||
@@ -201,13 +200,11 @@
 
   <!-- Footer -->
   <div class="w-full mt-auto pt-3 border-t border-gray-100">
-    <div class="flex items-center justify-between">
       <SidebarItem
         label="Settings"
         href="/settings"
         icon={Settings}
         {isCollapsed}
       />
-    </div>
   </div>
 </aside>

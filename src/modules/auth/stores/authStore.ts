@@ -33,6 +33,12 @@ function saveStoredState(session: AuthSession | null) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
 }
 
+function resolveSelectedTeam(user: User, current?: Team | null): Team | null {
+    if (!user?.teams || user.teams.length === 0) return null;
+    if (!current) return user.teams[0];
+    return user.teams.find((team) => team.tenant_id === current.tenant_id || team.id === current.id) ?? user.teams[0];
+}
+
 const storedState = loadStoredState();
 const initialSession: AuthSession | null = storedState
     ? {
@@ -57,7 +63,7 @@ function createAuthStore() {
 
         login: (user: User, tokens?: Tokens) => {
             update(session => {
-                const selectedTeam = session?.selectedTeam ?? user?.teams?.[0] ?? null;
+                const selectedTeam = resolveSelectedTeam(user, session?.selectedTeam ?? null);
                 const settings = session?.settings ?? { theme: 'light', language: 'en', sidebarOpen: true };
                 return {
                     ...session,
@@ -66,6 +72,20 @@ function createAuthStore() {
                     isAuthenticated: true,
                     selectedTeam,
                     settings
+                };
+            });
+        },
+
+        setSessionFromMe: (user: User) => {
+            update(session => {
+                const selectedTeam = resolveSelectedTeam(user, session?.selectedTeam ?? null);
+                const settings = session?.settings ?? { theme: 'light', language: 'en', sidebarOpen: true };
+                return {
+                    ...session,
+                    user,
+                    isAuthenticated: true,
+                    selectedTeam,
+                    settings,
                 };
             });
         },

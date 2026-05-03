@@ -32,12 +32,18 @@ apiClient.interceptors.response.use(
     (response) => {
         return response;
     },
-    (error) => {
+    async (error) => {
         if (error.response) {
             const { status, data } = error.response;
 
             if (status === 401) {
                 console.error('Unauthorized request');
+                if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
+                    const { authStore } = await import('$modules/auth/stores/authStore');
+                    authStore.logout();
+                    const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+                    window.location.assign(`/auth/login?returnTo=${returnTo}`);
+                }
             } else if (status === 403) {
                 console.error('Forbidden');
             } else if (status === 404) {

@@ -28,7 +28,7 @@
   onMount(async () => {
     try {
       const user = await getCurrentUserApi();
-      authStore.login(user);
+      authStore.setSessionFromMe(user);
     } catch {
       authStore.logout();
     } finally {

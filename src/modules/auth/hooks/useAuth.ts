@@ -66,7 +66,7 @@ export function useRegister() {
             const { get } = await import('svelte/store');
             const { page } = await import('$app/stores');
             const returnTo = get(page).url.searchParams.get("returnTo");
-            goto(returnTo || '/dashboard');
+            goto(returnTo || '/auth/login');
         },
         onError: (error: any) => {
             console.error('Registration failed:', error.message);
