@@ -36,7 +36,8 @@ export function useLogin() {
             
             const { get } = await import('svelte/store');
             const { page } = await import('$app/stores');
-            const returnTo = get(page).url.searchParams.get("returnTo");
+            const params = get(page).url.searchParams;
+            const returnTo = params.get("redirect") || params.get("returnTo");
             goto(returnTo || '/dashboard');
         },
         onError: (error: any) => {
@@ -65,7 +66,8 @@ export function useRegister() {
             
             const { get } = await import('svelte/store');
             const { page } = await import('$app/stores');
-            const returnTo = get(page).url.searchParams.get("returnTo");
+            const params = get(page).url.searchParams;
+            const returnTo = params.get("redirect") || params.get("returnTo");
             goto(returnTo || '/auth/login');
         },
         onError: (error: any) => {

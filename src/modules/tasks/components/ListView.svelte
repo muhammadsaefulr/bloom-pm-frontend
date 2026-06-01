@@ -1,9 +1,12 @@
 <script lang="ts">
   import { Calendar, MoreHorizontal, CheckCircle2 } from "@lucide/svelte";
+  import { createEventDispatcher } from "svelte";
   // @ts-expect-error module resolution
   import { cn } from "$lib/utils/cn.ts";
 
-  import { filteredTasks } from "../stores/taskStore.js";
+  import { filteredTasks, selectTask, taskCategories, type TaskID } from "../stores/taskStore.js";
+
+  const dispatch = createEventDispatcher<{ selectTask: TaskID }>();
 
   function getStatusColor(status: string) {
     switch (status) {
@@ -17,11 +20,23 @@
         return "bg-gray-100 text-gray-700 border-gray-200";
     }
   }
+
+  function getCategoryColor(category: string) {
+    return (
+      taskCategories.find((taskCategory) => taskCategory.name === category)?.color ??
+      "text-gray-700 bg-gray-100"
+    );
+  }
+
+  function openTask(taskId: TaskID) {
+    selectTask(taskId);
+    dispatch("selectTask", taskId);
+  }
 </script>
 
-<div class="h-full w-full p-6 bg-white overflow-y-auto overflow-x-hidden">
+<div class="h-full w-full overflow-y-auto overflow-x-hidden bg-gray-50/50 p-5">
   <div
-    class="w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden"
+    class="w-full overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm"
   >
     <div class="divide-y divide-gray-100">
       {#if $filteredTasks.length === 0}
@@ -31,17 +46,21 @@
       {/if}
       {#each $filteredTasks as task}
         <div
-          class="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group"
+          class="group flex cursor-pointer items-center justify-between gap-4 p-4 transition-colors hover:bg-gray-50"
+          role="button"
+          tabindex="0"
+          on:click={() => openTask(task.id)}
+          on:keydown={(event) => event.key === "Enter" && openTask(task.id)}
         >
-          <div class="flex items-center gap-4">
+          <div class="flex min-w-0 items-center gap-4">
             <button
               class="text-gray-300 hover:text-pink-600 transition-colors"
             >
               <CheckCircle2 size={24} />
             </button>
-            <div class="flex flex-col">
+            <div class="flex min-w-0 flex-col">
               <span class="font-medium text-gray-900">{task.title}</span>
-              <div class="flex items-center gap-2 mt-1">
+              <div class="mt-1 flex flex-wrap items-center gap-2">
                 <span
                   class={cn(
                     "text-xs font-semibold px-2 py-0.5 rounded-md border",
@@ -50,11 +69,20 @@
                 >
                   {task.status}
                 </span>
+                <span
+                  class={cn(
+                    "rounded-md px-2 py-0.5 text-xs font-semibold",
+                    getCategoryColor(task.category),
+                  )}
+                >
+                  {task.category}
+                </span>
+                <span class="text-xs text-gray-400">{task.owner}</span>
               </div>
             </div>
           </div>
-          <div class="flex items-center gap-6">
-            <div class="flex items-center gap-1.5 text-sm text-gray-500">
+          <div class="flex shrink-0 items-center gap-6">
+            <div class="hidden items-center gap-1.5 text-sm text-gray-500 sm:flex">
               <Calendar size={14} class="text-gray-400" />
               {task.dueDate}
             </div>

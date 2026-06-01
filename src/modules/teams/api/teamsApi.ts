@@ -1,4 +1,5 @@
 import { apiClient } from '$lib/api/client.js';
+import type { AxiosRequestConfig } from 'axios';
 import type { Team, TeamMember, UpdateTeamRequest, InviteMemberRequest } from '../types/index.js';
 
 export async function updateTeamApi(id: string, data: UpdateTeamRequest): Promise<{ message: string; data: Team }> {
@@ -6,9 +7,10 @@ export async function updateTeamApi(id: string, data: UpdateTeamRequest): Promis
     return response.data;
 }
 
-export async function getTeamMembersApi(tenantId: string): Promise<TeamMember[]> {
+export async function getTeamMembersApi(tenantId: string, config: AxiosRequestConfig = {}): Promise<TeamMember[]> {
     const response = await apiClient.get<any>('/teams/member', {
-        params: { tenant_id: tenantId }
+        ...config,
+        params: { tenant_id: tenantId, ...config.params }
     });
     return response.data.data || [];
 }

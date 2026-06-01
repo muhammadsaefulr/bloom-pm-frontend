@@ -10,6 +10,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import Preloader from "$lib/components/ui/Preloader.svelte";
+  import { isGlobalLoading } from "$lib/stores/loadingStore.js";
 
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -86,9 +87,12 @@
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>
-  {#if showContent}
-    <slot />
-  {:else}
+  {#if !showContent}
     <Preloader />
+  {:else}
+    <slot />
+    {#if $isGlobalLoading}
+      <Preloader />
+    {/if}
   {/if}
 </QueryClientProvider>

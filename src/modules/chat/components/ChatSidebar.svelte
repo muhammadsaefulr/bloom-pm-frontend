@@ -7,11 +7,15 @@
   type SidebarChat = {
     id: string;
     name: string;
+    description?: string;
     avatar: string;
     lastMessage: string;
     time: string;
     unread: number;
+    roomType: "private" | "group";
     isGroup: boolean;
+    status?: "online" | "offline" | "last_seen_recently";
+    participantCount?: number;
   };
   type ContactItem = {
     id: string;
@@ -32,13 +36,13 @@
   let contactSearchQuery = "";
   let groupSearchQuery = "";
   let groupName = "";
-  let selectedContact: ContactItem | null = null;
+  let groupDescription = "";
   let selectedGroupMembers: ContactItem[] = [];
 
   const dispatch = createEventDispatcher<{
     select: { id: string };
-    createFromContact: { contactUserId: string };
-    createGroup: { name: string; memberUserIds: string[] };
+    "create-from-contact": { contactUserId: string };
+    "create-group": { name: string; description: string; memberUserIds: string[] };
     reconnect: null;
     clear: null;
   }>();
@@ -52,7 +56,6 @@
     showContactPanel = true;
     showGroupPanel = false;
     showMoreMenu = false;
-    selectedContact = null;
   }
 
   function openGroupPanel() {
@@ -62,14 +65,13 @@
     groupStep = "members";
     groupSearchQuery = "";
     groupName = "";
+    groupDescription = "";
     selectedGroupMembers = [];
   }
 
-  function submitCreateFromContact() {
-    if (!selectedContact) return;
-    dispatch("createFromContact", { contactUserId: selectedContact.user_id });
+  function startChatFromContact(contact: ContactItem) {
+    dispatch("create-from-contact", { contactUserId: contact.user_id });
     showContactPanel = false;
-    selectedContact = null;
     contactSearchQuery = "";
   }
 
@@ -83,14 +85,22 @@
   function submitCreateGroup() {
     const name = groupName.trim();
     if (!name || selectedGroupMembers.length === 0) return;
-    dispatch("createGroup", {
+    dispatch("create-group", {
       name,
+      description: groupDescription.trim(),
       memberUserIds: selectedGroupMembers.map((member) => member.user_id),
     });
     showGroupPanel = false;
     groupStep = "members";
     groupName = "";
+    groupDescription = "";
     selectedGroupMembers = [];
+  }
+
+  function initialsForName(name: string) {
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return "G";
+    return words.slice(0, 2).map((word) => word.charAt(0).toUpperCase()).join("");
   }
 
   $: filteredChats = chats.filter((chat) => {
@@ -249,7 +259,7 @@
         <div class="flex-1 p-4 space-y-4 bg-white">
           <div class="flex justify-center">
             <div class="w-16 h-16 rounded-full bg-pink-50 flex items-center justify-center text-pink-600 text-xl font-semibold">
-              {groupName.trim().charAt(0).toUpperCase() || "G"}
+              {initialsForName(groupName)}
             </div>
           </div>
           <input
@@ -258,6 +268,11 @@
             placeholder="Nama grup"
             class="w-full text-sm bg-white border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:border-pink-600"
           />
+          <textarea
+            bind:value={groupDescription}
+            placeholder="Deskripsi grup"
+            class="w-full min-h-20 text-sm bg-white border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:border-pink-600 resize-none"
+          ></textarea>
           <div>
             <p class="text-xs font-medium text-gray-500 mb-2">{selectedGroupMembers.length} anggota dipilih</p>
             <div class="space-y-2 max-h-52 overflow-y-auto">
@@ -318,11 +333,8 @@
         {:else}
           {#each filteredContacts as contact}
             <button
-              class={cn(
-                "w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-50",
-                selectedContact?.id === contact.id ? "bg-pink-50" : "",
-              )}
-              on:click={() => (selectedContact = contact)}
+              class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-50"
+              on:click={() => startChatFromContact(contact)}
             >
               <img src={contact.avatar} alt={contact.name} class="w-10 h-10 rounded-full object-cover" />
               <div class="min-w-0">
@@ -334,15 +346,8 @@
         {/if}
       </div>
       <div class="p-3 border-t border-gray-100 bg-gray-50 space-y-2">
-        <button
-          class="w-full bg-pink-600 text-white text-sm font-medium py-2 rounded-lg hover:bg-pink-700 transition-colors disabled:opacity-50"
-          on:click={submitCreateFromContact}
-          disabled={!selectedContact}
-        >
-          Mulai Chat
-        </button>
         <p class="text-[11px] text-gray-500">
-          Room private dibuat otomatis oleh backend saat chat dibuka.
+          Klik kontak untuk langsung membuka private chat.
         </p>
       </div>
     </div>
@@ -396,7 +401,12 @@
             </span>
           </div>
           <div class="flex justify-between items-center gap-2">
-            <p class="text-sm text-gray-500 truncate">{chat.lastMessage}</p>
+            <p class="flex min-w-0 items-center gap-1.5 truncate text-sm text-gray-500">
+              {#if chat.roomType === "private"}
+                <span class={cn("h-1.5 w-1.5 shrink-0 rounded-full", chat.status === "online" ? "bg-emerald-500" : "bg-gray-300")}></span>
+              {/if}
+              <span class="truncate">{chat.lastMessage}</span>
+            </p>
             {#if chat.unread > 0}
               <span
                 class="bg-pink-600 text-white text-[10px] font-bold px-1.5 py-0.5 min-w-[1.25rem] text-center rounded-full shrink-0"

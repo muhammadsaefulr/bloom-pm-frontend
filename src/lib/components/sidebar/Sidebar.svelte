@@ -20,6 +20,7 @@
     authStore,
   } from "$modules/auth/stores/authStore.js";
   import { useLogout } from "$modules/auth/hooks/useAuth.js";
+  import { safeAvatarUrl } from "$lib/utils/avatar.js";
   import { slide, fade } from "svelte/transition";
   // @ts-expect-error module resolution
   import { cn } from "$lib/utils/cn.ts";
@@ -34,7 +35,7 @@
     { label: "Home", href: "/dashboard", icon: Home },
     { label: "Chat", href: "/chat", icon: MessageCircleIcon },
     { label: "My Tasks", href: "/tasks", icon: CheckSquare },
-    { label: "My Meetings", href: "#", icon: Video },
+    { label: "My Meetings", href: "/meetings", icon: Video },
     { label: "Saved Files", href: "#", icon: FileText },
   ];
 
@@ -54,10 +55,10 @@
     }
   }
 
-  function expandSidebar() {
-    if (isCollapsed) {
-      authStore.updateSettings({ sidebarOpen: true });
-    }
+  function collapseSidebar(event: MouseEvent) {
+    event.stopPropagation();
+    isProfileOpen = false;
+    authStore.updateSettings({ sidebarOpen: false });
   }
 </script>
 
@@ -68,13 +69,28 @@
   )}
 >
   <!-- Profile Header -->
-  <div on:click={toggleProfile} class="flex items-center justify-between px-2 mb-6 hover:bg-gray-50 rounded-lg p-1.5 -ml-1.5 transition-colors">
+  <div
+    role="button"
+    tabindex="0"
+    on:click={toggleProfile}
+    on:keydown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggleProfile();
+      }
+    }}
+    class="flex items-center justify-between px-2 mb-6 hover:bg-gray-50 rounded-lg p-1.5 -ml-1.5 transition-colors"
+  >
     <button
+      type="button"
       class="flex items-center gap-3"
+      on:click={(event) => {
+        event.stopPropagation();
+        toggleProfile();
+      }}
     >
       <img
-        src={$currentUser?.avatar_url ||
-          "https://ui-avatars.com/api/?name=" + ($currentUser?.name || "User")}
+        src={safeAvatarUrl($currentUser?.name || "User", $currentUser?.avatar_url)}
         alt="Profile"
         class="w-9 h-9 rounded-full object-cover border border-gray-200"
       />
@@ -92,9 +108,12 @@
     </button>
     {#if !isCollapsed}
       <button
+        type="button"
         transition:fade={{ duration: 200 }}
         class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors p-1.5 rounded-lg shrink-0"
-        on:click={() => authStore.updateSettings({ sidebarOpen: false })}
+        aria-label="Collapse sidebar"
+        title="Collapse sidebar"
+        on:click={collapseSidebar}
       >
         <ChevronsLeft class="w-4 h-4" />
       </button>

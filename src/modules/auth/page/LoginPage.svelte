@@ -1,12 +1,10 @@
 <script lang="ts">
   import { Mail, Lock, Eye, EyeOff, LogIn, Loader2 } from "@lucide/svelte";
   import { useLogin } from "../hooks/useAuth.js";
-  import { goto } from "$app/navigation";
-  import { env } from "$env/dynamic/public";
 
   const authUrl = `${(
-    env.VITE_API_BASE_URL ?? "http://localhost:8000"
-  ).replace(/\/$/, "")}/api/v1/auth/google`;
+    import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1"
+  ).replace(/\/$/, "")}/auth/google`;
   let email = "";
   let password = "";
   let rememberMe = false;

@@ -5,7 +5,7 @@
 </script>
 
 <DashboardLayout>
-  <div class="h-full flex flex-col max-w-5xl mx-auto pb-10">
+  <div class="h-full w-full flex flex-col mx-auto pb-10">
     <div class="flex items-center justify-between mb-8">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">Settings</h1>
@@ -15,9 +15,9 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+    <div class="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-8">
       <!-- Settings Sidebar -->
-      <div class="col-span-1 border-r border-gray-100 pr-6 space-y-1">
+      <div class="border-r border-gray-100 pr-6 space-y-1">
         <a
           href="/settings"
           class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-colors {$page.url.pathname === '/settings' ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'}"
@@ -47,7 +47,7 @@
       </div>
 
       <!-- Settings Content -->
-      <div class="col-span-1 md:col-span-3">
+      <div class="min-w-0">
         <slot />
       </div>
     </div>

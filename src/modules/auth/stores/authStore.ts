@@ -2,6 +2,7 @@ import { writable, derived, type Readable } from 'svelte/store';
 import type { AuthSession, User, Tokens, Team, UserSettings } from '../types/index.js';
 
 const STORAGE_KEY = 'bloom_pm_ui_settings';
+const DEFAULT_SETTINGS: UserSettings = { theme: 'light', language: 'en', sidebarOpen: true };
 
 // Load initial state from localStorage if in browser
 function loadStoredState(): Partial<AuthSession> | null {
@@ -64,7 +65,7 @@ function createAuthStore() {
         login: (user: User, tokens?: Tokens) => {
             update(session => {
                 const selectedTeam = resolveSelectedTeam(user, session?.selectedTeam ?? null);
-                const settings = session?.settings ?? { theme: 'light', language: 'en', sidebarOpen: true };
+                const settings = { ...DEFAULT_SETTINGS, ...session?.settings };
                 return {
                     ...session,
                     user,
@@ -79,7 +80,7 @@ function createAuthStore() {
         setSessionFromMe: (user: User) => {
             update(session => {
                 const selectedTeam = resolveSelectedTeam(user, session?.selectedTeam ?? null);
-                const settings = session?.settings ?? { theme: 'light', language: 'en', sidebarOpen: true };
+                const settings = { ...DEFAULT_SETTINGS, ...session?.settings };
                 return {
                     ...session,
                     user,
@@ -130,7 +131,7 @@ function createAuthStore() {
         updateSettings: (settings: Partial<UserSettings>) => {
             update((session) => {
                 if (session) {
-                    return { ...session, settings: { ...(session.settings || { theme: 'light', language: 'en' }), ...settings } as UserSettings };
+                    return { ...session, settings: { ...DEFAULT_SETTINGS, ...(session.settings || {}), ...settings } as UserSettings };
                 }
                 return session;
             });

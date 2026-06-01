@@ -1,12 +1,38 @@
 import { writable, derived } from "svelte/store";
+import { fallbackAvatarUrl } from "$lib/utils/avatar.js";
+import {
+  createTaskApi,
+  deleteTaskApi,
+  getTasksApi,
+  updateTaskApi,
+} from "../api/tasksApi.js";
+import { showTaskToast } from "./taskToastStore.js";
 
 export type TaskStatus = "To do" | "Doing" | "Done";
 export type TaskPriority = "Urgent" | "Normal" | "Low";
+export type TaskID = string | number;
+export type TaskAssignee = {
+  id: string;
+  name: string;
+  email?: string;
+  avatarUrl?: string;
+};
+
+export const taskCategories = [
+  { name: "Event", color: "text-violet-700 bg-violet-50" },
+  { name: "Campaign", color: "text-rose-700 bg-rose-50" },
+  { name: "Operations", color: "text-blue-700 bg-blue-50" },
+  { name: "Product", color: "text-emerald-700 bg-emerald-50" },
+  { name: "Reporting", color: "text-amber-700 bg-amber-50" },
+  { name: "General", color: "text-gray-700 bg-gray-100" },
+] as const;
+export type TaskCategory = (typeof taskCategories)[number]["name"];
 
 export interface Task {
-  id: number;
+  id: TaskID;
   title: string;
   description: string;
+  category: TaskCategory;
   status: TaskStatus;
   priority: TaskPriority;
   dueDate: string;
@@ -15,7 +41,23 @@ export interface Task {
   comments: number;
   checklist: string | null;
   users: string[];
+  assignees?: TaskAssignee[];
+  owner: string;
+  project: string;
+  progress: number;
+  content: string;
+  contentJson?: unknown;
+  contentText?: string;
+  projectId?: string;
+  statusId?: string;
+  priorityId?: string;
+  assignedUserId?: string;
 }
+
+export type TaskDraft = Pick<
+  Task,
+  "title" | "description" | "category" | "status" | "priority" | "dueDate" | "owner" | "project"
+>;
 
 export const labels = writable([
   { id: "todo", name: "To do", color: "bg-orange-500 text-white" },
@@ -23,156 +65,11 @@ export const labels = writable([
   { id: "done", name: "Done", color: "bg-pink-500 text-white" },
 ]);
 
-// Initial mock data
-const initialTasks: Task[] = [
-  {
-    id: 1,
-    title: "Q3 Evaluation",
-    description: "Q3 team and product evaluation",
-    status: "To do",
-    priority: "Urgent",
-    dueDate: "11 Jan 2025",
-    tags: [
-      { name: "Internal", color: "text-emerald-700 bg-emerald-50" },
-      { name: "Urgent", color: "text-rose-700 bg-rose-50" },
-    ],
-    attachments: 2,
-    comments: 2,
-    checklist: "2/2",
-    users: [
-      "https://ui-avatars.com/api/?name=J&background=random",
-      "https://ui-avatars.com/api/?name=S&background=random",
-    ],
-  },
-  {
-    id: 2,
-    title: "Monthly report",
-    description: "Monthly team and individual reports",
-    status: "To do",
-    priority: "Normal",
-    dueDate: "11 Jan 2025",
-    tags: [
-      { name: "Internal", color: "text-emerald-700 bg-emerald-50" },
-      { name: "Lead", color: "text-amber-700 bg-amber-50" },
-    ],
-    attachments: 1,
-    comments: 3,
-    checklist: null,
-    users: [
-      "https://ui-avatars.com/api/?name=A&background=random",
-      "https://ui-avatars.com/api/?name=B&background=random",
-    ],
-  },
-  {
-    id: 3,
-    title: "Factory Visit",
-    description: "Jakarta factory visit",
-    status: "To do",
-    priority: "Urgent",
-    dueDate: "11 Jan 2025",
-    tags: [{ name: "Lead", color: "text-amber-700 bg-amber-50" }],
-    attachments: 0,
-    comments: 1,
-    checklist: "4/12",
-    users: [
-      "https://ui-avatars.com/api/?name=C&background=random",
-      "https://ui-avatars.com/api/?name=D&background=random",
-    ],
-  },
-  {
-    id: 4,
-    title: "Print Brochures",
-    description: "Print the latest marketing brochures",
-    status: "To do",
-    priority: "Normal",
-    dueDate: "11 Jan 2025",
-    tags: [{ name: "Lead", color: "text-amber-700 bg-amber-50" }],
-    attachments: 0,
-    comments: 0,
-    checklist: null,
-    users: [],
-  },
-  {
-    id: 5,
-    title: "Preparation of Q2 report",
-    description: "Making monthly reports",
-    status: "Doing",
-    priority: "Normal",
-    dueDate: "12 Jan 2025",
-    tags: [{ name: "Internal", color: "text-emerald-700 bg-emerald-50" }],
-    attachments: 0,
-    comments: 4,
-    checklist: null,
-    users: [
-      "https://ui-avatars.com/api/?name=E&background=random",
-      "https://ui-avatars.com/api/?name=F&background=random",
-    ],
-  },
-  {
-    id: 6,
-    title: "March product exhibition",
-    description: "Preparation for the March product exhibition",
-    status: "Doing",
-    priority: "Urgent",
-    dueDate: "12 Jan 2025",
-    tags: [{ name: "Urgent", color: "text-rose-700 bg-rose-50" }],
-    attachments: 1,
-    comments: 0,
-    checklist: null,
-    users: ["https://ui-avatars.com/api/?name=G&background=random"],
-  },
-  {
-    id: 7,
-    title: "Digital Marketing",
-    description: "Marketing campaign for the month of Ramadhan...",
-    status: "Done",
-    priority: "Low",
-    dueDate: "10 Jan 2025",
-    tags: [
-      { name: "Internal", color: "text-emerald-700 bg-emerald-50" },
-      { name: "Lead", color: "text-amber-700 bg-amber-50" },
-    ],
-    attachments: 1,
-    comments: 0,
-    checklist: null,
-    users: [
-      "https://ui-avatars.com/api/?name=H&background=random",
-      "https://ui-avatars.com/api/?name=I&background=random",
-    ],
-  },
-  {
-    id: 8,
-    title: "Event 3.3",
-    description: "Preparation for event 3.3",
-    status: "Done",
-    priority: "Urgent",
-    dueDate: "10 Jan 2025",
-    tags: [{ name: "Urgent", color: "text-rose-700 bg-rose-50" }],
-    attachments: 0,
-    comments: 0,
-    checklist: null,
-    users: [
-      "https://ui-avatars.com/api/?name=J&background=random",
-      "https://ui-avatars.com/api/?name=K&background=random",
-      "https://ui-avatars.com/api/?name=L&background=random",
-    ],
-  },
-  {
-    id: 9,
-    title: "New Product Development",
-    description: "Preparation for new product launch Q2",
-    status: "Done",
-    priority: "Normal",
-    dueDate: "10 Jan 2025",
-    tags: [{ name: "Lead", color: "text-amber-700 bg-amber-50" }],
-    attachments: 0,
-    comments: 3,
-    checklist: "4/12",
-    users: ["https://ui-avatars.com/api/?name=M&background=random"],
-  },
-];
+const initialTasks: Task[] = [];
 
 export const tasksData = writable<Task[]>(initialTasks);
+export const selectedTaskId = writable<TaskID | null>(initialTasks[0]?.id ?? null);
+const updateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export const filterQuery = writable("");
 export const activeLabelFilter = writable("All Tasks"); // "All Tasks", "To do", "Doing", "Done"
@@ -188,7 +85,8 @@ export const filteredTasks = derived(
       result = result.filter(
         (t) =>
           t.title.toLowerCase().includes(q) ||
-          t.description.toLowerCase().includes(q)
+          t.description.toLowerCase().includes(q) ||
+          t.category.toLowerCase().includes(q)
       );
     }
 
@@ -199,7 +97,6 @@ export const filteredTasks = derived(
     if ($activeSort === "title") {
       result.sort((a, b) => a.title.localeCompare(b.title));
     } else if ($activeSort === "dueDate") {
-      // Very basic string sort for dummy dates
       result.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     } else if ($activeSort === "priority") {
       const priorityMap: Record<string, number> = {
@@ -215,3 +112,133 @@ export const filteredTasks = derived(
     return result;
   }
 );
+
+export const selectedTask = derived(
+  [tasksData, selectedTaskId],
+  ([$tasksData, $selectedTaskId]) =>
+    $tasksData.find((task) => task.id === $selectedTaskId) ?? null
+);
+
+function syncSelectedTask(tasks: Task[]) {
+  selectedTaskId.update((selectedId) => {
+    if (selectedId && tasks.some((task) => task.id === selectedId)) {
+      return selectedId;
+    }
+
+    return tasks[0]?.id ?? null;
+  });
+}
+
+export async function loadTasks() {
+  let loadedTasks: Task[];
+
+  try {
+    loadedTasks = await getTasksApi({ limit: 100 });
+  } catch (error) {
+    console.error("Failed to load tasks from API", error);
+    tasksData.set([]);
+    syncSelectedTask([]);
+    showTaskToast("Failed to load tasks.", "error");
+    return [];
+  }
+
+  tasksData.set(loadedTasks);
+  syncSelectedTask(loadedTasks);
+  return loadedTasks;
+}
+
+export function selectTask(taskId: TaskID) {
+  selectedTaskId.set(taskId);
+}
+
+export function updateTask(taskId: TaskID, patch: Partial<Task>) {
+  let updatedTask: Task | null = null;
+  tasksData.update((tasks) =>
+    tasks.map((task) => {
+      if (task.id !== taskId) return task;
+      updatedTask = { ...task, ...patch };
+      return updatedTask;
+    })
+  );
+
+  const taskForRequest = updatedTask as Task | null;
+  if (taskForRequest && typeof taskForRequest.id === "string") {
+    const taskId = taskForRequest.id;
+    const existingTimer = updateTimers.get(taskId);
+
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    updateTimers.set(
+      taskId,
+      setTimeout(() => {
+        updateTimers.delete(taskId);
+        void updateTaskApi(taskForRequest).catch((error) => {
+          console.error("Failed to update task", error);
+          showTaskToast("Failed to update task.", "error");
+        });
+      }, 500),
+    );
+  }
+}
+
+export function createTask(status: TaskStatus = "To do") {
+  const newTask: Task = {
+    id: Date.now(),
+    title: "Untitled task",
+    description: "Add a short task description",
+    category: "General",
+    status,
+    priority: "Normal",
+    dueDate: "No date",
+    tags: [{ name: "Internal", color: "text-emerald-700 bg-emerald-50" }],
+    attachments: 0,
+    comments: 0,
+    checklist: null,
+    users: [fallbackAvatarUrl("New")],
+    assignees: [],
+    owner: "Unassigned",
+    project: "",
+    progress: 0,
+    content:
+      "<h2>Task notes</h2><p>Start writing context, requirements, decisions, and checklist items here.</p>",
+  };
+
+  tasksData.update((tasks) => [newTask, ...tasks]);
+  selectedTaskId.set(newTask.id);
+
+  void createTaskApi(newTask).then((persistedTask) => {
+    tasksData.update((tasks) => tasks.map((task) => (task.id === newTask.id ? persistedTask : task)));
+    selectedTaskId.update((selectedId) => (selectedId === newTask.id ? persistedTask.id : selectedId));
+    showTaskToast("Task created.", "success");
+  }).catch((error) => {
+    console.error("Failed to create task", error);
+    tasksData.update((tasks) => tasks.filter((task) => task.id !== newTask.id));
+    selectedTaskId.update((selectedId) => (selectedId === newTask.id ? null : selectedId));
+    showTaskToast("Failed to create task.", "error");
+  });
+
+  return newTask;
+}
+
+export function deleteTask(taskId: TaskID) {
+  tasksData.update((tasks) => tasks.filter((task) => task.id !== taskId));
+  selectedTaskId.update((selectedId) => (selectedId === taskId ? null : selectedId));
+
+  if (typeof taskId === "string") {
+    const existingTimer = updateTimers.get(taskId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      updateTimers.delete(taskId);
+    }
+
+    void deleteTaskApi(taskId).then(() => {
+      showTaskToast("Task deleted.", "success");
+    }).catch((error) => {
+      console.error("Failed to delete task", error);
+      showTaskToast("Failed to delete task.", "error");
+    });
+  }
+}
+

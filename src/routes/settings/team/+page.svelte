@@ -148,7 +148,7 @@
         <Building class="w-5 h-5 text-gray-400" />
         Team Information
       </h2>
-      <div class="space-y-6 max-w-xl">
+      <div class="space-y-6">
         <div class="space-y-2">
           <label for="team_name" class="block text-sm font-medium text-gray-700"
             >Team Name</label
@@ -174,7 +174,7 @@
         {:else}
           <div class="pt-8 mt-6 border-t border-gray-100 flex flex-col items-start gap-3">
              <h3 class="text-sm font-semibold text-red-600">Danger Zone</h3>
-             <p class="text-xs text-gray-500 max-w-sm">
+             <p class="text-xs text-gray-500">
                 Leaving this team will instantly revoke your access to all projects, tasks, and members inside it.
              </p>
              <button

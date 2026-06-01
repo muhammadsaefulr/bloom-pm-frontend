@@ -1,6 +1,18 @@
 import axios from 'axios';
+import { startGlobalLoading } from '$lib/stores/loadingStore.js';
+import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
+declare module 'axios' {
+    export interface AxiosRequestConfig {
+        skipGlobalLoading?: boolean;
+    }
+
+    export interface InternalAxiosRequestConfig {
+        skipGlobalLoading?: boolean;
+    }
+}
 
 /**
  * Axios instance configured with credentials support for cookie-based authentication
@@ -18,6 +30,9 @@ export const apiClient = axios.create({
  */
 apiClient.interceptors.request.use(
     (config) => {
+        if (!config.skipGlobalLoading) {
+            (config as typeof config & { finishGlobalLoading?: () => Promise<void> }).finishGlobalLoading = startGlobalLoading();
+        }
         return config;
     },
     (error) => {
@@ -29,17 +44,51 @@ apiClient.interceptors.request.use(
  * Response interceptor for handling errors globally
  */
 apiClient.interceptors.response.use(
-    (response) => {
+    async (response) => {
+        await (response.config as typeof response.config & { finishGlobalLoading?: () => Promise<void> }).finishGlobalLoading?.();
         return response;
     },
-    async (error) => {
+    async (error: AxiosError<any>) => {
+        await (error.config as (typeof error.config & { finishGlobalLoading?: () => Promise<void> }) | undefined)?.finishGlobalLoading?.();
+
         if (error.response) {
             const { status, data } = error.response;
+            const originalRequest = error.config as
+                | (InternalAxiosRequestConfig & { _retry?: boolean })
+                | undefined;
 
             if (status === 401) {
+                const requestUrl = originalRequest?.url ?? '';
+                const canRefresh =
+                    typeof window !== 'undefined' &&
+                    !!originalRequest &&
+                    !originalRequest._retry &&
+                    !requestUrl.includes('/auth/login') &&
+                    !requestUrl.includes('/auth/register') &&
+                    !requestUrl.includes('/auth/refresh-tokens');
+
+                if (canRefresh) {
+                    originalRequest._retry = true;
+
+                    try {
+                        const refreshResponse = await apiClient.post('/auth/refresh-tokens', {
+                            refresh_token: '',
+                        });
+                        const { authStore } = await import('$modules/auth/stores/authStore.js');
+
+                        if (refreshResponse.data?.tokens) {
+                            authStore.updateTokens(refreshResponse.data.tokens);
+                        }
+
+                        return apiClient(originalRequest);
+                    } catch {
+                        // Fall through to the normal logout redirect below.
+                    }
+                }
+
                 console.error('Unauthorized request');
                 if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
-                    const { authStore } = await import('$modules/auth/stores/authStore');
+                    const { authStore } = await import('$modules/auth/stores/authStore.js');
                     authStore.logout();
                     const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
                     window.location.assign(`/auth/login?returnTo=${returnTo}`);

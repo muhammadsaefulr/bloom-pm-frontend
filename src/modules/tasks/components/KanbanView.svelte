@@ -11,173 +11,176 @@
   // @ts-expect-error module resolution
   import { cn } from "$lib/utils/cn.ts";
 
-  const dispatch = createEventDispatcher();
+  import {
+    createTask,
+    labels,
+    filteredTasks,
+    selectTask,
+    taskCategories,
+    type TaskID,
+    type TaskStatus,
+  } from "../stores/taskStore.js";
 
-  import { labels, filteredTasks } from "../stores/taskStore.js";
+  const dispatch = createEventDispatcher<{
+    addLabel: void;
+    selectTask: TaskID;
+  }>();
 
   $: groupedTasks = {
-    todo: $filteredTasks.filter((t) => t.status === "To do"),
-    doing: $filteredTasks.filter((t) => t.status === "Doing"),
-    done: $filteredTasks.filter((t) => t.status === "Done"),
+    todo: $filteredTasks.filter((task) => task.status === "To do"),
+    doing: $filteredTasks.filter((task) => task.status === "Doing"),
+    done: $filteredTasks.filter((task) => task.status === "Done"),
   };
+
+  function openTask(taskId: TaskID) {
+    selectTask(taskId);
+    dispatch("selectTask", taskId);
+  }
+
+  function getCategoryColor(category: string) {
+    return (
+      taskCategories.find((taskCategory) => taskCategory.name === category)?.color ??
+      "text-gray-700 bg-gray-100"
+    );
+  }
 </script>
 
-<div
-  class="h-full w-full overflow-x-auto overflow-y-hidden p-6 bg-white flex gap-6"
->
+<div class="flex h-full w-full gap-5 overflow-x-auto overflow-y-hidden bg-gray-50/50 p-5">
   {#each $labels as column}
-    <div class="w-[340px] shrink-0 flex flex-col h-full pl-1">
-      <!-- Column Header -->
-      <div class="flex items-center justify-between mb-4">
+    <section class="flex h-full w-[330px] shrink-0 flex-col rounded-xl border border-gray-100 bg-white">
+      <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
         <div class="flex items-center gap-2">
-          <!-- Small colored dot corresponding to the label color -->
           <div
             class={cn(
-              "w-4 h-4 rounded-full flex items-center justify-center shrink-0",
+              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
               column.color,
             )}
           >
-            <!-- Icon/dot if needed -->
-            <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+            <div class="h-1.5 w-1.5 rounded-full bg-white"></div>
           </div>
           <h2 class="text-base font-bold text-gray-900">{column.name}</h2>
-          <span class="text-xs font-medium text-gray-400 ml-1"
-            >{groupedTasks[column.id as keyof typeof groupedTasks]?.length || 0} Tasks</span
-          >
+          <span class="ml-1 text-xs font-medium text-gray-400">
+            {groupedTasks[column.id as keyof typeof groupedTasks]?.length || 0}
+          </span>
         </div>
         <button
-          class="text-gray-400 hover:text-gray-700 transition-colors p-1"
-          title="Add Task in {column.name}"
+          class="rounded-lg p-1 text-gray-400 transition hover:bg-gray-50 hover:text-gray-700"
+          title="Add task in {column.name}"
+          on:click={() => createTask(column.name as TaskStatus)}
         >
           <Plus size={18} strokeWidth={2.5} />
         </button>
       </div>
 
-      <!-- Task Cards List (Vertical Scroll inside column) -->
-      <div class="flex-1 overflow-y-auto pb-6 scrollbar-hide space-y-4">
-        {#if groupedTasks[column.id as keyof typeof groupedTasks]}
-          {#each groupedTasks[column.id as keyof typeof groupedTasks] as task}
-            <div
-              class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer flex flex-col gap-3 group"
-            >
-              <!-- Card Header -->
-              <div class="flex items-start justify-between">
-                <h3
-                  class="font-bold text-gray-900 text-[15px] leading-tight group-hover:text-pink-600 transition-colors"
-                >
-                  {task.title}
-                </h3>
-                <button
-                  class="text-gray-300 hover:text-gray-500 p-0.5 -mt-1 -mr-1"
-                >
-                  <MoreHorizontal size={18} />
-                </button>
+      <div class="flex-1 space-y-3 overflow-y-auto p-3 pb-6">
+        {#each groupedTasks[column.id as keyof typeof groupedTasks] ?? [] as task}
+          <button
+            type="button"
+            class="group flex w-full cursor-pointer flex-col gap-3 rounded-xl border border-gray-100 bg-white p-4 text-left shadow-sm transition hover:border-pink-100 hover:shadow-md"
+            on:click={() => openTask(task.id)}
+          >
+            <div class="flex items-start justify-between gap-3">
+              <h3 class="text-[15px] font-bold leading-tight text-gray-900 transition group-hover:text-pink-600">
+                {task.title}
+              </h3>
+              <span class="-mr-1 -mt-1 rounded-md p-0.5 text-gray-300 group-hover:text-gray-500">
+                <MoreHorizontal size={18} />
+              </span>
+            </div>
+
+            <p class="line-clamp-2 pr-2 text-[13px] leading-snug text-gray-500">
+              {task.description}
+            </p>
+
+            <div class="mt-1 flex flex-wrap gap-2">
+              <span class={cn("rounded-md px-2 py-0.5 text-[10px] font-bold", getCategoryColor(task.category))}>
+                {task.category}
+              </span>
+            </div>
+
+            {#if task.tags && task.tags.length > 0}
+              <div class="mt-1 flex flex-wrap gap-2">
+                {#each task.tags as tag}
+                  <span class={cn("rounded-md px-2 py-0.5 text-[10px] font-bold", tag.color)}>
+                    {tag.name}
+                  </span>
+                {/each}
+              </div>
+            {/if}
+
+            <div>
+              <div class="mb-1 flex items-center justify-between text-[11px] font-medium text-gray-400">
+                <span>{task.owner}</span>
+                <span>{task.progress}%</span>
+              </div>
+              <div class="h-1.5 overflow-hidden rounded-full bg-gray-100">
+                <div class="h-full rounded-full bg-pink-500" style={`width: ${task.progress}%`}></div>
+              </div>
+            </div>
+
+            <div class="h-px w-full bg-gray-50"></div>
+
+            <div class="flex items-center justify-between">
+              <div class="flex flex-col gap-2">
+                <div class="flex items-center gap-1.5 text-[11px] font-medium text-gray-500">
+                  <Calendar size={12} class="text-gray-400" />
+                  {task.dueDate}
+                </div>
+
+                {#if task.users && task.users.length > 0}
+                  <div class="flex -space-x-1.5 overflow-hidden pt-1">
+                    {#each task.users.slice(0, 3) as user}
+                      <img
+                        class="inline-block h-6 w-6 rounded-full object-cover ring-2 ring-white"
+                        src={user}
+                        alt="Task assignee"
+                      />
+                    {/each}
+                    {#if task.users.length > 3}
+                      <div class="flex h-6 w-6 items-center justify-center rounded-full bg-gray-100 text-[10px] font-medium text-gray-600 ring-2 ring-white">
+                        +{task.users.length - 3}
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
               </div>
 
-              <!-- Description -->
-              <p
-                class="text-gray-500 text-[13px] leading-snug line-clamp-2 pr-2"
-              >
-                {task.description}
-              </p>
-
-              <!-- Tags -->
-              {#if task.tags && task.tags.length > 0}
-                <div class="flex flex-wrap gap-2 mt-1">
-                  {#each task.tags as tag}
-                    <span
-                      class={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded-md",
-                        tag.color,
-                      )}>• {tag.name}</span
-                    >
-                  {/each}
-                </div>
-              {/if}
-
-              <div class="h-px bg-gray-50 w-full my-1"></div>
-
-              <!-- Footer (Date, Users, Icons) -->
-              <div class="flex items-center justify-between mt-1">
-                <!-- Due Date & Users -->
-                <div class="flex flex-col gap-2">
-                  <div
-                    class="flex items-center gap-1.5 text-gray-500 text-[11px] font-medium"
-                  >
-                    <Calendar size={12} class="text-gray-400" />
-                    Due Date {task.dueDate}
+              <div class="flex flex-col items-end gap-2 text-gray-400">
+                {#if task.checklist}
+                  <div class="flex items-center gap-1 text-[11px] font-medium">
+                    <List size={12} />
+                    {task.checklist}
                   </div>
-
-                  <!-- Assignees -->
-                  {#if task.users && task.users.length > 0}
-                    <div class="flex -space-x-1.5 overflow-hidden pt-1">
-                      {#each task.users.slice(0, 3) as user}
-                        <img
-                          class="inline-block h-6 w-6 rounded-full ring-2 ring-white object-cover"
-                          src={user}
-                          alt="User Avatar"
-                        />
-                      {/each}
-                      {#if task.users.length > 3}
-                        <div
-                          class="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-medium text-gray-600 ring-2 ring-white"
-                        >
-                          +{task.users.length - 3}
-                        </div>
-                      {/if}
+                {/if}
+                <div class="flex items-center gap-2.5">
+                  {#if task.attachments > 0}
+                    <div class="flex items-center gap-0.5 text-[11px] font-medium">
+                      <Paperclip size={13} />
+                      {task.attachments}
+                    </div>
+                  {/if}
+                  {#if task.comments > 0}
+                    <div class="flex items-center gap-0.5 text-[11px] font-medium">
+                      <MessageSquare size={13} />
+                      {task.comments}
                     </div>
                   {/if}
                 </div>
-
-                <!-- Icons right bottom -->
-                <div
-                  class="flex flex-col items-end justify-between h-full gap-2"
-                >
-                  <div class="text-[11px] font-medium text-gray-400 mt-1">
-                    {#if task.checklist}
-                      <div class="flex items-center gap-1 justify-end">
-                        <List size={12} />
-                        {task.checklist}
-                      </div>
-                    {/if}
-                  </div>
-                  <div
-                    class="flex items-center gap-2.5 text-gray-400 mt-auto pt-1"
-                  >
-                    {#if task.attachments > 0}
-                      <div
-                        class="flex items-center gap-0.5 text-[11px] font-medium hover:text-gray-700"
-                      >
-                        <Paperclip size={13} />
-                        {task.attachments}
-                      </div>
-                    {/if}
-                    {#if task.comments > 0}
-                      <div
-                        class="flex items-center gap-0.5 text-[11px] font-medium hover:text-gray-700"
-                      >
-                        <MessageSquare size={13} />
-                        {task.comments}
-                      </div>
-                    {/if}
-                  </div>
-                </div>
               </div>
             </div>
-          {/each}
-        {/if}
+          </button>
+        {/each}
       </div>
-    </div>
+    </section>
   {/each}
 
-  <!-- Add New Label Column Button -->
-  <div class="w-[340px] shrink-0 pr-6">
+  <div class="w-[330px] shrink-0 pr-6">
     <button
-      class="w-full h-14 rounded-2xl border-2 border-dashed border-gray-300 hover:border-pink-400 hover:bg-pink-50/50 flex items-center justify-center gap-2 text-gray-500 hover:text-pink-600 font-semibold transition-all group"
+      class="group flex h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 font-semibold text-gray-500 transition-all hover:border-pink-400 hover:bg-pink-50/50 hover:text-pink-600"
       on:click={() => dispatch("addLabel")}
     >
-      <Plus size={20} class="group-hover:scale-110 transition-transform" /> Add Task
-      Label
+      <Plus size={20} class="transition-transform group-hover:scale-110" />
+      Add Task Label
     </button>
   </div>
 </div>

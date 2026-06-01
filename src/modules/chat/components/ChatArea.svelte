@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Search, MoreVertical, Paperclip, Smile, Send } from "@lucide/svelte";
+  import { Search, MoreVertical, Paperclip, Smile, Send, Trash2, X } from "@lucide/svelte";
   import { createEventDispatcher } from "svelte";
   // @ts-expect-error module resolution
   import { cn } from "$lib/utils/cn.ts";
@@ -7,14 +7,21 @@
   type ActiveChat = {
     id: string;
     name: string;
+    description?: string;
     avatar: string;
-    status?: string;
+    roomType: "private" | "group";
+    status?: "online" | "offline" | "last_seen_recently";
     isGroup: boolean;
+    participantUserIds?: string[];
+    contactUserId?: string;
+    contactEmail?: string;
+    participantCount?: number;
   };
 
   type ChatMessage = {
     id: string;
     sender: "me" | "other";
+    senderUserId: string;
     senderName?: string;
     text: string;
     time: string;
@@ -30,19 +37,50 @@
     isCurrentUser: boolean;
     isOwner: boolean;
   };
+  type ContactItem = {
+    id: string;
+    user_id: string;
+    name: string;
+    email: string;
+    avatar: string;
+  };
+  type CurrentUser = {
+    id: string;
+    name: string;
+    email: string;
+    avatar: string;
+  };
+  type ProfilePanel = {
+    user_id: string;
+    name: string;
+    email: string;
+    avatar: string;
+    isCurrentUser?: boolean;
+    roleLabel?: string;
+  };
 
   export let activeChat: ActiveChat | null = null;
   export let messages: ChatMessage[] = [];
+  export let contacts: ContactItem[] = [];
+  export let currentUser: CurrentUser = { id: "", name: "", email: "", avatar: "" };
   export let wsStatus: "connecting" | "connected" | "disconnected" = "disconnected";
   export let wsError = "";
   export let typingUsers: string[] = [];
   export let wsDebugLogs: string[] = [];
+  export let searchResults: ChatMessage[] = [];
+  export let isSearchingMessages = false;
   export let groupMembers: GroupMember[] = [];
   export let canManageGroup = false;
 
   let newMessage = "";
   let showOptionsMenu = false;
+  let showSearchPanel = false;
   let showGroupSettingsPanel = false;
+  let searchQuery = "";
+  let groupNameDraft = "";
+  let groupDescriptionDraft = "";
+  let draftRoomID = "";
+  let profilePanel: ProfilePanel | null = null;
   const dispatch = createEventDispatcher<{
     send: { text: string };
     typing: null;
@@ -50,6 +88,9 @@
     leaveGroup: null;
     groupSettings: null;
     removeGroupParticipant: { userId: string };
+    searchMessages: { query: string };
+    updateGroup: { name: string; description: string };
+    deleteMessage: { messageId: string };
   }>();
 
   function sendMessage() {
@@ -70,8 +111,85 @@
   function statusLabel() {
     if (typingUsers.length === 1) return `${typingUsers[0]} sedang mengetik...`;
     if (typingUsers.length > 1) return "Beberapa user sedang mengetik...";
-    if (activeChat?.status === "online") return "online";
+    if (!activeChat) return "offline";
+    if (activeChat.roomType === "group") {
+      return `${activeChat.participantCount || groupMembers.length || 0} members`;
+    }
+    if (activeChat.status === "online") return "online";
+    if (activeChat.status === "last_seen_recently") return "last seen recently";
     return "offline";
+  }
+
+  function profileForUser(userID: string): ProfilePanel | null {
+    if (!userID) return null;
+    if (userID === currentUser.id) {
+      const name = currentUser.name || "You";
+      return {
+        user_id: userID,
+        name,
+        email: currentUser.email || "-",
+        avatar: currentUser.avatar || activeChat?.avatar || "",
+        isCurrentUser: true,
+        roleLabel: "You",
+      };
+    }
+
+    const member = groupMembers.find((item) => item.user_id === userID);
+    if (member) {
+      return {
+        user_id: member.user_id,
+        name: member.name,
+        email: member.email,
+        avatar: member.avatar,
+        roleLabel: member.isOwner ? "Group owner" : "Team member",
+      };
+    }
+
+    const contact = contacts.find((item) => item.user_id === userID);
+    if (contact) {
+      return {
+        user_id: contact.user_id,
+        name: contact.name,
+        email: contact.email,
+        avatar: contact.avatar,
+        roleLabel: activeChat?.roomType === "private" && activeChat.status === "online" ? "Online" : "Team member",
+      };
+    }
+
+    return null;
+  }
+
+  function openHeaderProfile() {
+    if (!activeChat) return;
+    if (activeChat.roomType === "group") {
+      openGroupSettings();
+      return;
+    }
+
+    const otherUserID = activeChat.contactUserId || activeChat.participantUserIds?.find((id) => id !== currentUser.id) || "";
+    profilePanel = profileForUser(otherUserID) || {
+      user_id: otherUserID,
+      name: activeChat.name,
+      email: activeChat.contactEmail || "-",
+      avatar: activeChat.avatar,
+      roleLabel: statusLabel(),
+    };
+  }
+
+  function openMessageProfile(message: ChatMessage) {
+    if (message.sender === "me") return;
+    profilePanel = profileForUser(message.senderUserId) || {
+      user_id: message.senderUserId,
+      name: message.senderName || "User",
+      email: "-",
+      avatar: activeChat?.avatar || "",
+      roleLabel: "Team member",
+    };
+  }
+
+  function deleteMessage(message: ChatMessage) {
+    if (message.sender !== "me") return;
+    dispatch("deleteMessage", { messageId: message.id });
   }
 
   function closeOptionsMenu() {
@@ -81,6 +199,9 @@
   function openGroupSettings() {
     showOptionsMenu = false;
     showGroupSettingsPanel = true;
+    groupNameDraft = activeChat?.name || "";
+    groupDescriptionDraft = activeChat?.description || "";
+    draftRoomID = activeChat?.id || "";
     dispatch("groupSettings", null);
   }
 
@@ -88,14 +209,42 @@
     if (!canManageGroup || member.isCurrentUser) return;
     dispatch("removeGroupParticipant", { userId: member.user_id });
   }
+
+  function submitSearch() {
+    const query = searchQuery.trim();
+    if (!query) return;
+    dispatch("searchMessages", { query });
+  }
+
+  function saveGroupInfo() {
+    if (activeChat?.roomType !== "group" || !canManageGroup || !groupNameDraft.trim()) return;
+    dispatch("updateGroup", {
+      name: groupNameDraft.trim(),
+      description: groupDescriptionDraft.trim(),
+    });
+  }
+
+  $: if (activeChat?.id && activeChat.id !== draftRoomID && !showGroupSettingsPanel) {
+    groupNameDraft = activeChat.name;
+    groupDescriptionDraft = activeChat.description || "";
+    draftRoomID = activeChat.id;
+    searchQuery = "";
+    showSearchPanel = false;
+    profilePanel = null;
+  }
 </script>
 
 {#if !activeChat}
   <div class="flex-1 h-full bg-white flex flex-col">
     <div class="flex-1 flex items-center justify-center px-6 text-center">
-      <p class="text-gray-500 text-base md:text-lg font-medium">
-        Mulai Chat Baru Atau Buka Chat Yang Sudah ada
-      </p>
+      <div class="space-y-2">
+        <p class="text-gray-500 text-base md:text-lg font-medium">
+          Mulai Chat Baru Atau Buka Chat Yang Sudah ada
+        </p>
+        {#if wsError}
+          <p class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{wsError}</p>
+        {/if}
+      </div>
     </div>
     <div class="border-t border-gray-200 bg-white/80 px-3 py-2 z-10">
       <details>
@@ -131,7 +280,7 @@
   <div
     class="h-16 px-4 flex items-center justify-between bg-gray-50 border-b border-gray-200 shrink-0 z-40"
   >
-    <div class="flex items-center gap-3 cursor-pointer">
+    <button class="flex min-w-0 items-center gap-3 text-left" on:click={openHeaderProfile}>
       <img
         src={activeChat?.avatar ||
           "https://ui-avatars.com/api/?name=Chat&background=64748B&color=fff"}
@@ -139,17 +288,26 @@
         class="w-10 h-10 rounded-full object-cover"
       />
       <div class="flex flex-col">
-        <span class="font-medium text-gray-900 leading-tight"
+        <span class="font-medium text-gray-900 leading-tight truncate"
           >{activeChat?.name || "Select room"}</span
         >
-        <span class="text-xs text-gray-500 leading-tight mt-0.5"
-          >{statusLabel()}</span
-        >
+        <span class="flex items-center gap-1.5 text-xs text-gray-500 leading-tight mt-0.5">
+          {#if activeChat?.roomType === "private"}
+            <span class={cn("h-1.5 w-1.5 rounded-full", activeChat?.status === "online" ? "bg-emerald-500" : "bg-gray-300")}></span>
+          {/if}
+          {statusLabel()}
+        </span>
       </div>
-    </div>
+    </button>
     <div class="relative flex items-center gap-4 text-gray-500">
       <div class="w-px h-6 bg-gray-200 hidden sm:block mx-1"></div>
-      <button class="hover:text-gray-700 transition-colors">
+      <button
+        class={cn(
+          "p-1.5 rounded-full hover:bg-gray-200 hover:text-gray-700 transition-colors",
+          showSearchPanel ? "bg-gray-200 text-gray-800" : "",
+        )}
+        on:click={() => (showSearchPanel = !showSearchPanel)}
+      >
         <Search size={20} />
       </button>
       <button
@@ -163,8 +321,8 @@
       </button>
 
       {#if showOptionsMenu}
-        <div class="absolute right-0 top-10 z-50 w-52 rounded-lg border border-gray-200 bg-white py-2 shadow-lg" on:click|stopPropagation>
-          {#if activeChat?.isGroup}
+        <div class="absolute right-0 top-10 z-50 w-52 rounded-lg border border-gray-200 bg-white py-2 shadow-lg">
+          {#if activeChat?.roomType === "group"}
             <button
               class="w-full px-4 py-2.5 text-left text-sm text-gray-800 hover:bg-gray-50 transition-colors"
               on:click={openGroupSettings}
@@ -195,7 +353,47 @@
     </div>
   </div>
 
-  {#if showGroupSettingsPanel && activeChat?.isGroup}
+  {#if showSearchPanel}
+    <div class="z-30 border-b border-gray-200 bg-white px-4 py-3">
+      <div class="flex gap-2">
+        <input
+          bind:value={searchQuery}
+          type="text"
+          placeholder="Cari pesan di room ini"
+          class="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-pink-600 focus:outline-none"
+          on:keydown={(event) => {
+            if (event.key === "Enter") submitSearch();
+          }}
+        />
+        <button
+          class="rounded-lg bg-pink-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          disabled={!searchQuery.trim() || isSearchingMessages}
+          on:click={submitSearch}
+        >
+          {isSearchingMessages ? "Mencari..." : "Cari"}
+        </button>
+      </div>
+      {#if searchQuery.trim() && searchResults.length > 0}
+        <div class="mt-3 max-h-44 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50">
+          {#each searchResults as result}
+            <div class="border-b border-gray-100 px-3 py-2 last:border-b-0">
+              <div class="flex items-center justify-between gap-3">
+                <p class="text-xs font-semibold text-gray-700 truncate">
+                  {result.sender === "me" ? "Anda" : result.senderName || "User"}
+                </p>
+                <span class="text-[11px] text-gray-500 shrink-0">{result.time}</span>
+              </div>
+              <p class="mt-0.5 text-sm text-gray-700 line-clamp-2">{result.text}</p>
+            </div>
+          {/each}
+        </div>
+      {:else if searchQuery.trim() && !isSearchingMessages}
+        <p class="mt-2 text-xs text-gray-500">Tidak ada hasil untuk kata kunci ini.</p>
+      {/if}
+    </div>
+  {/if}
+
+  {#if showGroupSettingsPanel && activeChat?.roomType === "group"}
     <div class="absolute right-0 top-0 z-50 h-full w-full max-w-sm bg-white border-l border-gray-200 shadow-xl flex flex-col">
       <div class="h-16 px-4 flex items-center justify-between bg-gray-50 border-b border-gray-200">
         <div class="min-w-0">
@@ -213,7 +411,31 @@
         <div class="flex flex-col items-center text-center">
           <img src={activeChat.avatar} alt={activeChat.name} class="w-20 h-20 rounded-full object-cover mb-3" />
           <h3 class="text-base font-semibold text-gray-900">{activeChat.name}</h3>
-          <p class="text-xs text-gray-500 mt-1">{groupMembers.length} peserta</p>
+          <p class="text-xs text-gray-500 mt-1">{activeChat.description || `${groupMembers.length} peserta`}</p>
+        </div>
+        <div class="border-t border-gray-100 pt-4 space-y-3">
+          <h4 class="text-sm font-semibold text-gray-900">Info Grup</h4>
+          <input
+            bind:value={groupNameDraft}
+            disabled={!canManageGroup}
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-500 focus:border-pink-600 focus:outline-none"
+            placeholder="Nama grup"
+          />
+          <textarea
+            bind:value={groupDescriptionDraft}
+            disabled={!canManageGroup}
+            class="w-full min-h-24 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-gray-500 focus:border-pink-600 focus:outline-none"
+            placeholder="Deskripsi grup"
+          ></textarea>
+          {#if canManageGroup}
+            <button
+              class="w-full rounded-lg bg-pink-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={!groupNameDraft.trim()}
+              on:click={saveGroupInfo}
+            >
+              Simpan Info Grup
+            </button>
+          {/if}
         </div>
         <div class="border-t border-gray-100 pt-4">
           <div class="flex items-center justify-between mb-3">
@@ -279,6 +501,37 @@
     </div>
   {/if}
 
+  {#if profilePanel}
+    <div class="absolute right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col border-l border-gray-200 bg-white shadow-xl">
+      <div class="flex h-16 items-center justify-between border-b border-gray-200 bg-gray-50 px-4">
+        <div>
+          <h2 class="text-base font-semibold text-gray-900">Profile</h2>
+          <p class="text-xs text-gray-500">{profilePanel.roleLabel || statusLabel()}</p>
+        </div>
+        <button
+          class="rounded-full p-2 text-gray-500 transition hover:bg-gray-200 hover:text-gray-800"
+          aria-label="Close profile"
+          on:click={() => (profilePanel = null)}
+        >
+          <X size={18} />
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-5">
+        <div class="flex flex-col items-center text-center">
+          <img src={profilePanel.avatar} alt={profilePanel.name} class="h-24 w-24 rounded-full object-cover" />
+          <h3 class="mt-4 text-lg font-semibold text-gray-900">{profilePanel.name}</h3>
+          <p class="mt-1 text-sm text-gray-500">{profilePanel.email}</p>
+          {#if !profilePanel.isCurrentUser && activeChat?.roomType === "private"}
+            <div class="mt-3 inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600">
+              <span class={cn("h-2 w-2 rounded-full", activeChat?.status === "online" ? "bg-emerald-500" : "bg-gray-300")}></span>
+              {statusLabel()}
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Chat Messages Area -->
   <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-2 z-10 flex flex-col">
     <!-- Date divider -->
@@ -299,7 +552,7 @@
       >
         <div
           class={cn(
-            "max-w-[85%] sm:max-w-[70%] rounded-lg px-3 py-2 text-sm relative shadow-sm",
+            "group max-w-[85%] sm:max-w-[70%] rounded-lg px-3 py-2 text-sm relative shadow-sm",
             msg.sender === "me"
               ? "bg-[#D9FDD3] text-gray-900 rounded-tr-none"
               : "bg-white text-gray-900 rounded-tl-none",
@@ -326,10 +579,10 @@
             </div>
           {/if}
 
-          {#if msg.sender === "other" && activeChat?.isGroup && !msg.isConsecutive}
-            <div class="text-[11px] font-bold text-pink-600 mb-0.5">
+          {#if msg.sender === "other" && activeChat?.roomType === "group" && !msg.isConsecutive}
+            <button class="mb-0.5 text-left text-[11px] font-bold text-pink-600 hover:underline" on:click={() => openMessageProfile(msg)}>
               {msg.senderName}
-            </div>
+            </button>
           {/if}
 
           <div class="flex items-end gap-2 flex-wrap">
@@ -355,6 +608,16 @@
                 </svg>
               {/if}
             </span>
+            {#if msg.sender === "me"}
+              <button
+                class="ml-1 rounded p-0.5 text-gray-400 opacity-70 transition hover:bg-black/5 hover:text-red-600 sm:opacity-0 sm:group-hover:opacity-100"
+                title="Delete message"
+                aria-label="Delete message"
+                on:click={() => deleteMessage(msg)}
+              >
+                <Trash2 size={12} />
+              </button>
+            {/if}
           </div>
         </div>
       </div>

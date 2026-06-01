@@ -22,9 +22,16 @@ type UseChatWsParams = {
 };
 
 export function useChatWebSocket(params: UseChatWsParams) {
-  let socket: WebSocket | null = null;
+  type SocketState = {
+    socket: WebSocket;
+    roomID: string;
+    intentionalClose: boolean;
+  };
+
+  let socketState: SocketState | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  let isIntentionalClose = false;
+  let pendingQueue: ChatWsMessage[] = [];
+  const maxPendingMessages = 20;
 
   function wsUrl(roomID: string, token: string, tenantID: string): string {
     const base = params.apiBaseUrl.replace(/\/+$/, "");
@@ -44,8 +51,54 @@ export function useChatWebSocket(params: UseChatWsParams) {
     return url.replace(/token=[^&]+/, "token=***");
   }
 
+  function clearReconnectTimer() {
+    if (!reconnectTimer) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  function closeCurrentSocket(reason: string) {
+    if (!socketState) return;
+    socketState.intentionalClose = true;
+    socketState.socket.close();
+    debug(reason);
+    socketState = null;
+  }
+
+  function queueMessage(payload: ChatWsMessage) {
+    const activeRoomID = params.getRoomID();
+    if (payload.room_id && payload.room_id !== activeRoomID) {
+      debug(`send dropped type=${payload.type} (stale room)`);
+      return;
+    }
+
+    pendingQueue = [...pendingQueue.slice(-(maxPendingMessages - 1)), payload];
+    debug(`queued type=${payload.type} (socket connecting)`);
+  }
+
+  function flushPendingQueue(state: SocketState) {
+    const queued = pendingQueue;
+    pendingQueue = [];
+
+    for (const payload of queued) {
+      if (socketState !== state || state.socket.readyState !== WebSocket.OPEN) {
+        queueMessage(payload);
+        return;
+      }
+      if (payload.room_id && payload.room_id !== state.roomID) {
+        debug(`queued send skipped type=${payload.type} (stale room)`);
+        continue;
+      }
+      state.socket.send(JSON.stringify(payload));
+      debug(`sent queued type=${payload.type}`);
+    }
+  }
+
   function connect(roomID: string) {
-    close();
+    clearReconnectTimer();
+    closeCurrentSocket("closed previous connection intentionally");
+    pendingQueue = [];
+
     const token = params.getToken();
     const tenantID = params.getTenantID();
 
@@ -56,18 +109,26 @@ export function useChatWebSocket(params: UseChatWsParams) {
       return;
     }
 
-    isIntentionalClose = false;
     params.onStatus("connecting");
     const url = wsUrl(roomID, token, tenantID);
     debug(`connecting ${sanitizeUrl(url)}`);
-    socket = new WebSocket(url);
+    const nextSocket = new WebSocket(url);
+    const state: SocketState = {
+      socket: nextSocket,
+      roomID,
+      intentionalClose: false,
+    };
+    socketState = state;
 
-    socket.onopen = () => {
-      params.onStatus("connected");
+    nextSocket.onopen = () => {
+      if (socketState !== state) return;
       debug("connected");
+      params.onStatus("connected");
+      flushPendingQueue(state);
     };
 
-    socket.onmessage = (event) => {
+    nextSocket.onmessage = (event) => {
+      if (socketState !== state) return;
       try {
         const payload = JSON.parse(event.data) as ChatWsMessage;
         debug(`recv type=${payload.type}`);
@@ -77,18 +138,21 @@ export function useChatWebSocket(params: UseChatWsParams) {
       }
     };
 
-    socket.onerror = () => {
+    nextSocket.onerror = () => {
+      if (socketState !== state) return;
       params.onError("WebSocket connection error");
       debug("socket error");
     };
 
-    socket.onclose = (event) => {
+    nextSocket.onclose = (event) => {
+      if (socketState !== state) return;
       params.onStatus("disconnected");
       debug(`closed code=${event.code} reason=${event.reason || "-"}`);
-      if (!isIntentionalClose && event.code !== 1000) {
+      if (!state.intentionalClose && event.code !== 1000) {
         params.onError(`WebSocket closed (code: ${event.code})`);
       }
-      if (!isIntentionalClose) {
+      socketState = null;
+      if (!state.intentionalClose) {
         reconnectTimer = setTimeout(() => connect(params.getRoomID()), 2000);
         debug("scheduled reconnect in 2s");
       }
@@ -96,25 +160,27 @@ export function useChatWebSocket(params: UseChatWsParams) {
   }
 
   function send(payload: ChatWsMessage) {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
+    if (!socketState) {
+      debug(`send dropped type=${payload.type} (socket not ready)`);
+      return;
+    }
+    if (socketState.socket.readyState === WebSocket.CONNECTING) {
+      queueMessage(payload);
+      return;
+    }
+    if (socketState.socket.readyState !== WebSocket.OPEN) {
       debug(`send dropped type=${payload.type} (socket not open)`);
       return;
     }
-    socket.send(JSON.stringify(payload));
+    socketState.socket.send(JSON.stringify(payload));
     debug(`sent type=${payload.type}`);
   }
 
   function close() {
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    if (socket) {
-      isIntentionalClose = true;
-      socket.close();
-      socket = null;
-      debug("closed intentionally");
-    }
+    clearReconnectTimer();
+    pendingQueue = [];
+    closeCurrentSocket("closed intentionally");
+    params.onStatus("disconnected");
   }
 
   return { connect, send, close };

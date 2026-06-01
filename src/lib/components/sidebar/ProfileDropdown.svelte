@@ -11,6 +11,7 @@
   import { authStore, selectedTeam } from "$modules/auth/stores/authStore.js";
   import { goto } from "$app/navigation";
   import { logoutApi } from "$modules/auth/api/authApi.js";
+  import { safeAvatarUrl } from "$lib/utils/avatar.js";
 
   export let isOpen = false;
 
@@ -22,15 +23,7 @@
   $: teams = user?.teams || [];
   $: userRoleName = user?.user_role?.RoleName || user?.role || "User";
 
-  // Fallback avatar if none provided (using initials)
-  $: initials = user?.name
-    ? user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
-    : "U";
+  $: avatarUrl = safeAvatarUrl(user?.name || "User", user?.avatar_url);
 
   function handleClose() {
     dispatch("close");
@@ -72,19 +65,11 @@
     <!-- User Info -->
     <div class="flex flex-col items-center px-4 pb-4 border-b border-gray-100">
       <div class="relative mb-3">
-        {#if user?.avatar_url}
-          <img
-            src={user.avatar_url}
-            alt={user.name}
-            class="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
-          />
-        {:else}
-          <div
-            class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xl font-bold border-2 border-gray-100"
-          >
-            {initials}
-          </div>
-        {/if}
+        <img
+          src={avatarUrl}
+          alt={user?.name || "User"}
+          class="w-16 h-16 rounded-full object-cover border-2 border-gray-100"
+        />
 
         <!-- Team indicator badge (only if team exists) -->
         {#if currentTeam}

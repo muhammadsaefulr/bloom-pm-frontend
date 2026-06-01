@@ -6,7 +6,7 @@
   <title>Profile Settings | Bloom PM</title>
 </svelte:head>
 
-<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 pr-8">
+<div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
   <h2 class="text-lg font-semibold text-gray-900 mb-6">Profile Settings</h2>
 
   <div class="space-y-6">
