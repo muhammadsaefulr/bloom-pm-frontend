@@ -108,17 +108,17 @@
     }
   }
 
-  function statusLabel() {
+  $: computedStatusLabel = (() => {
     if (typingUsers.length === 1) return `${typingUsers[0]} sedang mengetik...`;
     if (typingUsers.length > 1) return "Beberapa user sedang mengetik...";
     if (!activeChat) return "offline";
-    if (activeChat.roomType === "group") {
+    if (activeChat.roomType === "group" && activeChat.isGroup !== false) {
       return `${activeChat.participantCount || groupMembers.length || 0} members`;
     }
     if (activeChat.status === "online") return "online";
     if (activeChat.status === "last_seen_recently") return "last seen recently";
     return "offline";
-  }
+  })();
 
   function profileForUser(userID: string): ProfilePanel | null {
     if (!userID) return null;
@@ -172,7 +172,7 @@
       name: activeChat.name,
       email: activeChat.contactEmail || "-",
       avatar: activeChat.avatar,
-      roleLabel: statusLabel(),
+      roleLabel: computedStatusLabel,
     };
   }
 
@@ -292,10 +292,10 @@
           >{activeChat?.name || "Select room"}</span
         >
         <span class="flex items-center gap-1.5 text-xs text-gray-500 leading-tight mt-0.5">
-          {#if activeChat?.roomType === "private"}
+          {#if activeChat?.roomType === "private" || activeChat?.isGroup === false}
             <span class={cn("h-1.5 w-1.5 rounded-full", activeChat?.status === "online" ? "bg-emerald-500" : "bg-gray-300")}></span>
           {/if}
-          {statusLabel()}
+          {computedStatusLabel}
         </span>
       </div>
     </button>
@@ -506,7 +506,7 @@
       <div class="flex h-16 items-center justify-between border-b border-gray-200 bg-gray-50 px-4">
         <div>
           <h2 class="text-base font-semibold text-gray-900">Profile</h2>
-          <p class="text-xs text-gray-500">{profilePanel.roleLabel || statusLabel()}</p>
+          <p class="text-xs text-gray-500">{profilePanel.roleLabel || computedStatusLabel}</p>
         </div>
         <button
           class="rounded-full p-2 text-gray-500 transition hover:bg-gray-200 hover:text-gray-800"
@@ -521,10 +521,10 @@
           <img src={profilePanel.avatar} alt={profilePanel.name} class="h-24 w-24 rounded-full object-cover" />
           <h3 class="mt-4 text-lg font-semibold text-gray-900">{profilePanel.name}</h3>
           <p class="mt-1 text-sm text-gray-500">{profilePanel.email}</p>
-          {#if !profilePanel.isCurrentUser && activeChat?.roomType === "private"}
+          {#if !profilePanel.isCurrentUser && (activeChat?.roomType === "private" || activeChat?.isGroup === false)}
             <div class="mt-3 inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600">
               <span class={cn("h-2 w-2 rounded-full", activeChat?.status === "online" ? "bg-emerald-500" : "bg-gray-300")}></span>
-              {statusLabel()}
+              {computedStatusLabel}
             </div>
           {/if}
         </div>

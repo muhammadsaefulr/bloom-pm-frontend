@@ -4,6 +4,7 @@ import {
   createTaskApi,
   deleteTaskApi,
   getTasksApi,
+  getTaskByIdApi,
   updateTaskApi,
 } from "../api/tasksApi.js";
 import { showTaskToast } from "./taskToastStore.js";
@@ -49,8 +50,6 @@ export interface Task {
   contentJson?: unknown;
   contentText?: string;
   projectId?: string;
-  statusId?: string;
-  priorityId?: string;
   assignedUserId?: string;
 }
 
@@ -69,6 +68,11 @@ const initialTasks: Task[] = [];
 
 export const tasksData = writable<Task[]>(initialTasks);
 export const selectedTaskId = writable<TaskID | null>(initialTasks[0]?.id ?? null);
+
+// Full detail of the currently selected task (loaded via GET /tasks/:id)
+export const selectedTaskDetail = writable<Task | null>(null);
+export const selectedTaskDetailLoading = writable<boolean>(false);
+
 const updateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export const filterQuery = writable("");
@@ -113,6 +117,7 @@ export const filteredTasks = derived(
   }
 );
 
+// Keep for backwards compat — returns overview-only task from list store
 export const selectedTask = derived(
   [tasksData, selectedTaskId],
   ([$tasksData, $selectedTaskId]) =>
@@ -147,12 +152,42 @@ export async function loadTasks() {
   return loadedTasks;
 }
 
+/**
+ * Fetch full task detail (including content fields) by ID.
+ * Populates selectedTaskDetail store.
+ */
+export async function loadTaskDetail(taskId: string) {
+  selectedTaskDetailLoading.set(true);
+
+  try {
+    const detail = await getTaskByIdApi(taskId);
+    selectedTaskDetail.set(detail);
+    // Patch the list entry too so metadata stays in sync
+    tasksData.update((tasks) =>
+      tasks.map((t) => (t.id === taskId ? { ...t, ...detail } : t))
+    );
+  } catch (error) {
+    console.error("Failed to load task detail", error);
+    showTaskToast("Failed to load task detail.", "error");
+    // Fall back to overview data from list store
+    selectedTaskDetail.set(null);
+  } finally {
+    selectedTaskDetailLoading.set(false);
+  }
+}
+
 export function selectTask(taskId: TaskID) {
   selectedTaskId.set(taskId);
+  selectedTaskDetail.set(null); // clear stale detail while loading
+
+  if (typeof taskId === "string") {
+    void loadTaskDetail(taskId);
+  }
 }
 
 export function updateTask(taskId: TaskID, patch: Partial<Task>) {
   let updatedTask: Task | null = null;
+
   tasksData.update((tasks) =>
     tasks.map((task) => {
       if (task.id !== taskId) return task;
@@ -161,19 +196,25 @@ export function updateTask(taskId: TaskID, patch: Partial<Task>) {
     })
   );
 
+  // Also patch detail store if it's the selected task
+  selectedTaskDetail.update((detail) => {
+    if (!detail || detail.id !== taskId) return detail;
+    return { ...detail, ...patch };
+  });
+
   const taskForRequest = updatedTask as Task | null;
   if (taskForRequest && typeof taskForRequest.id === "string") {
-    const taskId = taskForRequest.id;
-    const existingTimer = updateTimers.get(taskId);
+    const id = taskForRequest.id;
+    const existingTimer = updateTimers.get(id);
 
     if (existingTimer) {
       clearTimeout(existingTimer);
     }
 
     updateTimers.set(
-      taskId,
+      id,
       setTimeout(() => {
-        updateTimers.delete(taskId);
+        updateTimers.delete(id);
         void updateTaskApi(taskForRequest).catch((error) => {
           console.error("Failed to update task", error);
           showTaskToast("Failed to update task.", "error");
@@ -207,15 +248,18 @@ export function createTask(status: TaskStatus = "To do") {
 
   tasksData.update((tasks) => [newTask, ...tasks]);
   selectedTaskId.set(newTask.id);
+  selectedTaskDetail.set(newTask);
 
   void createTaskApi(newTask).then((persistedTask) => {
     tasksData.update((tasks) => tasks.map((task) => (task.id === newTask.id ? persistedTask : task)));
     selectedTaskId.update((selectedId) => (selectedId === newTask.id ? persistedTask.id : selectedId));
+    selectedTaskDetail.update((detail) => (detail?.id === newTask.id ? persistedTask : detail));
     showTaskToast("Task created.", "success");
   }).catch((error) => {
     console.error("Failed to create task", error);
     tasksData.update((tasks) => tasks.filter((task) => task.id !== newTask.id));
     selectedTaskId.update((selectedId) => (selectedId === newTask.id ? null : selectedId));
+    selectedTaskDetail.update((detail) => (detail?.id === newTask.id ? null : detail));
     showTaskToast("Failed to create task.", "error");
   });
 
@@ -225,6 +269,7 @@ export function createTask(status: TaskStatus = "To do") {
 export function deleteTask(taskId: TaskID) {
   tasksData.update((tasks) => tasks.filter((task) => task.id !== taskId));
   selectedTaskId.update((selectedId) => (selectedId === taskId ? null : selectedId));
+  selectedTaskDetail.update((detail) => (detail?.id === taskId ? null : detail));
 
   if (typeof taskId === "string") {
     const existingTimer = updateTimers.get(taskId);
@@ -241,4 +286,3 @@ export function deleteTask(taskId: TaskID) {
     });
   }
 }
-

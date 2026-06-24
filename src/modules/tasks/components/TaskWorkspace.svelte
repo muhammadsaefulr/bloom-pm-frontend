@@ -29,7 +29,9 @@
     activeSort,
     createTask,
     loadTasks,
-    selectedTask,
+    selectedTaskDetail,
+    selectedTaskDetailLoading,
+    selectTask,
   } from "../stores/taskStore.js";
   import { showTaskToast } from "../stores/taskToastStore.js";
 
@@ -63,7 +65,10 @@
     showDetailPanel = true;
   }
 
-  function openTaskDetail() {
+  function openTaskDetail(event?: CustomEvent<string | number>) {
+    if (event?.detail && typeof event.detail === "string") {
+      selectTask(event.detail);
+    }
     showDetailPanel = true;
   }
 
@@ -214,11 +219,15 @@
           </Resizable.Pane>
           <Resizable.Handle withHandle />
           <Resizable.Pane defaultSize={detailPanelSize} minSize={28} maxSize={58}>
-            <TaskDetailEditor
-              task={$selectedTask}
-              teamMembers={teamMembers}
-              on:close={closeTaskDetail}
-            />
+            {#if $selectedTaskDetailLoading}
+              <div class="flex h-full items-center justify-center text-sm text-gray-400">Loading…</div>
+            {:else}
+              <TaskDetailEditor
+                task={$selectedTaskDetail}
+                teamMembers={teamMembers}
+                on:close={closeTaskDetail}
+              />
+            {/if}
           </Resizable.Pane>
         </Resizable.PaneGroup>
       {/if}
@@ -238,18 +247,22 @@
 
       {#if showDetailPanel}
         <div class="fixed inset-0 z-40 bg-gray-900/30 xl:hidden" role="presentation">
-          <div
-            class={cn(
-              "absolute inset-y-0 right-0 bg-white shadow-xl",
-              "w-full max-w-md",
-            )}
-          >
+        <div
+          class={cn(
+            "absolute inset-y-0 right-0 bg-white shadow-xl",
+            "w-full max-w-md",
+          )}
+        >
+          {#if $selectedTaskDetailLoading}
+            <div class="flex h-full items-center justify-center text-sm text-gray-400">Loading…</div>
+          {:else}
             <TaskDetailEditor
-              task={$selectedTask}
+              task={$selectedTaskDetail}
               teamMembers={teamMembers}
               on:close={closeTaskDetail}
             />
-          </div>
+          {/if}
+        </div>
         </div>
       {/if}
 </DashboardPageShell>

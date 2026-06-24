@@ -61,11 +61,11 @@
     if (!selected) {
       activeChat = null;
     } else if (isGroupChat(selected)) {
-      activeChat = { ...selected, status: undefined };
+      activeChat = { ...selected, roomType: "group", isGroup: true, status: undefined };
     } else {
       const otherUserID = getOtherParticipantID(selected);
       const isOnline = !!otherUserID && !!roomOnlineMap[selected.id]?.has(otherUserID);
-      activeChat = { ...selected, roomType: "private", isGroup: false, status: isOnline ? "online" : selected.status || "offline" };
+      activeChat = { ...selected, roomType: "private", isGroup: false, status: isOnline ? "online" : selected.status || "offline", participantCount: undefined };
     }
     canManageActiveGroup = !!activeChat && isGroupChat(activeChat) && !!currentUserID && activeChat.ownerUserId === currentUserID;
   }

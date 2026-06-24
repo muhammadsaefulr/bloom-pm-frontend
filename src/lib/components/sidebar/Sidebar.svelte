@@ -1,25 +1,22 @@
 <script lang="ts">
   import {
     Home,
-    MessageSquarePlus,
     CheckSquare,
     Video,
     FileText,
-    Share2,
     Settings,
-    MoreHorizontal,
     ChevronsLeft,
-    Users,
     MessageCircleIcon,
   } from "@lucide/svelte";
   import SidebarItem from "./SidebarItem.svelte";
   import ProfileDropdown from "./ProfileDropdown.svelte";
+  import AIAssistantSidebarSection from "$modules/ai-assistant/components/AIAssistantSidebarSection.svelte";
+  import { aiAssistantStore } from "$modules/ai-assistant/stores/aiAssistantStore.js";
   import {
     currentUser,
     userSettings,
     authStore,
   } from "$modules/auth/stores/authStore.js";
-  import { useLogout } from "$modules/auth/hooks/useAuth.js";
   import { safeAvatarUrl } from "$lib/utils/avatar.js";
   import { slide, fade } from "svelte/transition";
   // @ts-expect-error module resolution
@@ -28,9 +25,6 @@
   $: isCollapsed = !($userSettings?.sidebarOpen ?? true);
   let isProfileOpen = false;
 
-  const logout = useLogout();
-
-  // Mock data based on the image
   const mainNav = [
     { label: "Home", href: "/dashboard", icon: Home },
     { label: "Chat", href: "/chat", icon: MessageCircleIcon },
@@ -38,14 +32,6 @@
     { label: "My Meetings", href: "/meetings", icon: Video },
     { label: "Saved Files", href: "#", icon: FileText },
   ];
-
-  const todayNav = [
-    { label: "Research Assistance Request", href: "#" },
-    { label: "Summarizing Last Meeting", href: "#" },
-    { label: "Prioritizing Tasks Request", href: "#" },
-  ];
-
-  const yesterdayNav = [{ label: "Document Summary Request", href: "#" }];
 
   function toggleProfile() {
     if (isCollapsed) {
@@ -139,6 +125,11 @@
         />
       {/each}
     </div>
+
+    <AIAssistantSidebarSection
+      conversations={$aiAssistantStore}
+      {isCollapsed}
+    />
 
     <!-- {#if !isCollapsed} -->
     <!-- Today Section -->

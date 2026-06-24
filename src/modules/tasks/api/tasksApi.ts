@@ -9,7 +9,8 @@ export type TaskAssigneeApi = {
   avatar_url?: string;
 };
 
-export type TaskApi = {
+// Shape returned by GET /tasks (list — overview only, no content fields)
+export type TaskSummaryApi = {
   id: string;
   project_id?: string;
   title: string;
@@ -17,8 +18,6 @@ export type TaskApi = {
   category?: string;
   status?: TaskStatus;
   priority?: TaskPriority;
-  status_id?: string;
-  priority_id?: string;
   assigned_user_id?: string;
   owner?: string;
   project_name?: string;
@@ -29,17 +28,23 @@ export type TaskApi = {
   attachments_count?: number;
   comments_count?: number;
   checklist?: string | null;
+  metadata?: unknown;
+};
+
+// Shape returned by GET /tasks/:id (detail — includes rich content)
+export type TaskApi = TaskSummaryApi & {
   content?: string;
   content_json?: unknown;
   content_text?: string;
 };
 
+// Query params for list endpoint — filters by string value, not UUID
 export type TaskListParams = {
   page?: number;
   limit?: number;
   project_id?: string;
-  status_id?: string;
-  priority_id?: string;
+  status?: string;
+  priority?: string;
   assigned_user_id?: string;
   search?: string;
 };
@@ -71,7 +76,8 @@ function normalizeAssignees(users?: (string | TaskAssigneeApi)[] | null) {
   return { avatars, assignees };
 }
 
-export function taskApiToView(task: TaskApi): Task {
+// Maps summary API shape (list response) → Task view model (no content fields)
+export function taskSummaryApiToView(task: TaskSummaryApi): Task {
   const { avatars, assignees } = normalizeAssignees(task.users);
 
   return {
@@ -91,13 +97,23 @@ export function taskApiToView(task: TaskApi): Task {
     owner: task.owner ?? "Unassigned",
     project: task.project_name ?? "",
     progress: task.progress ?? 0,
+    // Content fields empty — populated only when detail is fetched
+    content: "",
+    contentJson: undefined,
+    contentText: undefined,
+    projectId: task.project_id,
+    assignedUserId: task.assigned_user_id,
+  };
+}
+
+// Maps full API shape (detail response) → Task view model (including content)
+export function taskApiToView(task: TaskApi): Task {
+  const base = taskSummaryApiToView(task);
+  return {
+    ...base,
     content: task.content ?? "",
     contentJson: task.content_json,
     contentText: task.content_text,
-    projectId: task.project_id,
-    statusId: task.status_id,
-    priorityId: task.priority_id,
-    assignedUserId: task.assigned_user_id,
   };
 }
 
@@ -116,8 +132,6 @@ export function taskViewToApi(task: Task) {
     category: task.category,
     status: task.status,
     priority: task.priority,
-    status_id: task.statusId,
-    priority_id: task.priorityId,
     assigned_user_id: task.assignedUserId || assignees[0]?.id,
     owner: task.owner,
     project_name: task.project || undefined,
@@ -135,12 +149,19 @@ export function taskViewToApi(task: Task) {
 }
 
 export async function getTasksApi(params: TaskListParams = {}): Promise<Task[]> {
-  const response = await apiClient.get<{ data: TaskApi[] }>("/tasks", {
+  const response = await apiClient.get<{ data: TaskSummaryApi[] }>("/tasks", {
     params: { limit: 100, ...params },
     skipGlobalLoading: true,
   });
 
-  return (response.data.data || []).map(taskApiToView);
+  return (response.data.data || []).map(taskSummaryApiToView);
+}
+
+export async function getTaskByIdApi(id: string): Promise<Task> {
+  const response = await apiClient.get<{ data: TaskApi }>(`/tasks/${id}`, {
+    skipGlobalLoading: true,
+  });
+  return taskApiToView(response.data.data);
 }
 
 export async function createTaskApi(task: Task): Promise<Task> {
