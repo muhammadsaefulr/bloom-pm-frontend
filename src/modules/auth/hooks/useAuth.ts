@@ -120,7 +120,7 @@ export function useCurrentUser() {
     return createQuery(() => ({
         queryKey: ['currentUser'],
         queryFn: getCurrentUserApi,
-        enabled: authStore.isAuthenticated(),
+        enabled: authStore.isAuthenticated() && !authStore.isTokenExpired(),
         staleTime: 5 * 60 * 1000,
         retry: false,
     }));

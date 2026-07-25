@@ -71,10 +71,16 @@ apiClient.interceptors.response.use(
                     originalRequest._retry = true;
 
                     try {
-                        const refreshResponse = await apiClient.post('/auth/refresh-tokens', {
-                            refresh_token: '',
-                        });
                         const { authStore } = await import('$modules/auth/stores/authStore.js');
+                        const refreshToken = authStore.getRefreshToken();
+                        
+                        if (!refreshToken) {
+                            throw new Error("No refresh token available");
+                        }
+
+                        const refreshResponse = await axios.post(`${API_BASE_URL}/auth/refresh-tokens`, {
+                            refresh_token: refreshToken,
+                        }, { withCredentials: true });
 
                         if (refreshResponse.data?.tokens) {
                             authStore.updateTokens(refreshResponse.data.tokens);
