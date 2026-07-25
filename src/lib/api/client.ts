@@ -41,6 +41,23 @@ apiClient.interceptors.request.use(
 );
 
 /**
+ * Guard: ensures only one 401 redirect happens at a time.
+ */
+let isRedirectingToLogin = false;
+
+function forceLogoutRedirect() {
+    if (typeof window === 'undefined' || window.location.pathname.startsWith('/auth')) return;
+    if (isRedirectingToLogin) return;
+    isRedirectingToLogin = true;
+
+    import('$modules/auth/stores/authStore.js').then(({ authStore }) => {
+        authStore.logout();
+        const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.assign(`/auth/login?returnTo=${returnTo}`);
+    });
+}
+
+/**
  * Response interceptor for handling errors globally
  */
 apiClient.interceptors.response.use(
@@ -59,13 +76,20 @@ apiClient.interceptors.response.use(
 
             if (status === 401) {
                 const requestUrl = originalRequest?.url ?? '';
+
+                // ponytail: /auth/me 401 = session dead, skip refresh to avoid loop
+                const isAuthEndpoint =
+                    requestUrl.includes('/auth/login') ||
+                    requestUrl.includes('/auth/register') ||
+                    requestUrl.includes('/auth/refresh-tokens') ||
+                    requestUrl.includes('/auth/me');
+
                 const canRefresh =
                     typeof window !== 'undefined' &&
                     !!originalRequest &&
                     !originalRequest._retry &&
-                    !requestUrl.includes('/auth/login') &&
-                    !requestUrl.includes('/auth/register') &&
-                    !requestUrl.includes('/auth/refresh-tokens');
+                    !isAuthEndpoint &&
+                    !isRedirectingToLogin;
 
                 if (canRefresh) {
                     originalRequest._retry = true;
@@ -88,17 +112,11 @@ apiClient.interceptors.response.use(
 
                         return apiClient(originalRequest);
                     } catch {
-                        // Fall through to the normal logout redirect below.
+                        // Refresh failed — fall through to force logout.
                     }
                 }
 
-                console.error('Unauthorized request');
-                if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
-                    const { authStore } = await import('$modules/auth/stores/authStore.js');
-                    authStore.logout();
-                    const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
-                    window.location.assign(`/auth/login?returnTo=${returnTo}`);
-                }
+                forceLogoutRedirect();
             } else if (status === 403) {
                 console.error('Forbidden');
             } else if (status === 404) {
