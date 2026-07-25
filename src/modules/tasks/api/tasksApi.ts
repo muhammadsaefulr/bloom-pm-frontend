@@ -103,6 +103,7 @@ export function taskSummaryApiToView(task: TaskSummaryApi): Task {
     contentText: undefined,
     projectId: task.project_id,
     assignedUserId: task.assigned_user_id,
+    ownerId: task.owner,
   };
 }
 
@@ -133,7 +134,6 @@ export function taskViewToApi(task: Task) {
     status: task.status,
     priority: task.priority,
     assigned_user_id: task.assignedUserId || assignees[0]?.id,
-    owner: task.owner,
     project_name: task.project || undefined,
     due_date: task.dueDate === "No date" ? "" : task.dueDate,
     progress: task.progress,

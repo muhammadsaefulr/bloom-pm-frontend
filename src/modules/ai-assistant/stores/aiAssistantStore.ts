@@ -141,6 +141,20 @@ function createAssistantStore() {
         ),
       );
     },
+    deleteConversation: (conversationID: string) => {
+      update((conversations) =>
+        conversations.filter((conversation) => conversation.id !== conversationID)
+      );
+    },
+    renameConversation: (conversationID: string, newTitle: string) => {
+      update((conversations) =>
+        conversations.map((conversation) =>
+          conversation.id === conversationID
+            ? { ...conversation, title: newTitle }
+            : conversation
+        )
+      );
+    },
     reset: () => set([]),
   };
 }

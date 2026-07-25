@@ -51,7 +51,10 @@ export interface Task {
   contentText?: string;
   projectId?: string;
   assignedUserId?: string;
+  ownerId?: string;
 }
+
+type TaskOwnerLookup = { user?: { id?: string; name?: string } };
 
 export type TaskDraft = Pick<
   Task,
@@ -150,6 +153,22 @@ export async function loadTasks() {
   tasksData.set(loadedTasks);
   syncSelectedTask(loadedTasks);
   return loadedTasks;
+}
+
+function displayOwnerName(task: Task, ownerNames: Map<string, string>) {
+  if (!task.ownerId) return task.owner || "Unassigned";
+  return ownerNames.get(task.ownerId) ?? "Unassigned";
+}
+
+export function applyTaskOwnerNames(teamMembers: TaskOwnerLookup[]) {
+  const ownerNames = new Map(
+    teamMembers
+      .filter((member) => member.user?.id && member.user?.name)
+      .map((member) => [member.user!.id!, member.user!.name!]),
+  );
+
+  tasksData.update((tasks) => tasks.map((task) => ({ ...task, owner: displayOwnerName(task, ownerNames) })));
+  selectedTaskDetail.update((task) => (task ? { ...task, owner: displayOwnerName(task, ownerNames) } : task));
 }
 
 /**

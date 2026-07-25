@@ -28,6 +28,7 @@
     activeLabelFilter,
     activeSort,
     createTask,
+    applyTaskOwnerNames,
     loadTasks,
     selectedTaskDetail,
     selectedTaskDetailLoading,
@@ -85,6 +86,7 @@
 
     try {
       teamMembers = await getTeamMembersApi(tenantId, { skipGlobalLoading: true });
+      applyTaskOwnerNames(teamMembers);
     } catch (error) {
       console.error("Failed to load team members", error);
       showTaskToast("Failed to load team members.", "error");
@@ -97,7 +99,7 @@
   }
 
   onMount(() => {
-    loadTasks().catch((error) => {
+    loadTasks().then(() => applyTaskOwnerNames(teamMembers)).catch((error) => {
       console.error("Failed to load tasks", error);
     });
     loadTenantMembers();

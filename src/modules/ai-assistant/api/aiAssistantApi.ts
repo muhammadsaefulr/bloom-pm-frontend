@@ -36,3 +36,7 @@ export async function queryTaskAI(
 
   return response.data.data;
 }
+
+export async function deleteAiChat(conversationId: string): Promise<void> {
+  await apiClient.delete(`/ai/chat/${conversationId}`);
+}

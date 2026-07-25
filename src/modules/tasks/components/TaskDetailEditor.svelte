@@ -143,6 +143,11 @@
     updateTask(task.id, patch);
   }
 
+  function updateOwner(ownerId: string) {
+    const owner = memberOptions.find((member) => member.id === ownerId);
+    persist({ ownerId, owner: owner?.name ?? "Unassigned" });
+  }
+
   function getEditorView(): EditorView | null {
     if (!editor || editor.isDestroyed) return null;
 
@@ -788,12 +793,12 @@
           <span class="text-gray-400">Owner</span>
           <select
             class="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none focus:border-pink-500 focus:ring-2 focus:ring-pink-100"
-            value={task.owner}
-            on:change={(event) => persist({ owner: event.currentTarget.value })}
+            value={task.ownerId ?? ""}
+            on:change={(event) => updateOwner(event.currentTarget.value)}
           >
-            <option value={task.owner}>{task.owner || "Unassigned"}</option>
+            <option value="">Unassigned</option>
             {#each memberOptions as member}
-              <option value={member.name}>{member.name}</option>
+              <option value={member.id}>{member.name}</option>
             {/each}
           </select>
         </div>

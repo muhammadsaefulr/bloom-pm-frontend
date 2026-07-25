@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { onDestroy, tick } from "svelte";
   import {
     Bot,
     CheckCircle2,
     ClipboardList,
     Send,
     Sparkles,
+    ArrowDown,
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
@@ -18,6 +20,18 @@
   let isSending = false;
   let activeConversation: AIConversation | null = null;
   let messages: AIMessage[] = [];
+  
+  let scrollContainer: HTMLElement;
+  let showScrollButton = false;
+
+  const loadingTexts = [
+    "Reading task context...",
+    "Analyzing priorities...",
+    "Thinking...",
+    "Generating response...",
+  ];
+  let loadingTextIndex = 0;
+  let loadingInterval: ReturnType<typeof setInterval>;
 
   $: activeConversation =
     $aiAssistantStore.find(
@@ -36,6 +50,45 @@
   $: if (typeof window !== "undefined" && !activeConversation) {
     const id = aiAssistantStore.ensureConversation();
     goto(`/ai-assistant?chat=${id}`);
+  }
+
+  function handleScroll() {
+    if (!scrollContainer) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
+    showScrollButton = scrollHeight - scrollTop - clientHeight > 80;
+  }
+
+  async function scrollToBottom() {
+    if (!scrollContainer) return;
+    await tick();
+    scrollContainer.scrollTo({
+      top: scrollContainer.scrollHeight,
+      behavior: "smooth",
+    });
+  }
+
+  $: if (isSending) {
+    loadingTextIndex = 0;
+    loadingInterval = setInterval(() => {
+      loadingTextIndex = (loadingTextIndex + 1) % loadingTexts.length;
+    }, 2000);
+    tick().then(scrollToBottom);
+  } else {
+    if (loadingInterval) clearInterval(loadingInterval);
+    tick().then(() => {
+      if (!showScrollButton) scrollToBottom();
+    });
+  }
+
+  onDestroy(() => {
+    if (loadingInterval) clearInterval(loadingInterval);
+  });
+
+  $: if (messages.length) {
+    tick().then(() => {
+      if (!showScrollButton) scrollToBottom();
+      else handleScroll();
+    });
   }
 
   async function sendMessage() {
@@ -113,17 +166,15 @@
             <CheckCircle2 class="h-3.5 w-3.5" />
             {isSending ? "Thinking" : "Ready"}
           </span>
-          <span
-            class="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700"
-          >
-            <ClipboardList class="h-3.5 w-3.5" />
-            Task context
-          </span>
         </div>
       </div>
     </header>
 
-    <div class="flex-1 overflow-y-auto bg-gray-50/60 px-4 py-6 sm:px-6">
+    <div 
+      class="flex-1 overflow-y-auto bg-gray-50/60 px-4 py-6 sm:px-6 relative"
+      bind:this={scrollContainer}
+      on:scroll={handleScroll}
+    >
       <div class="flex w-full flex-col gap-6">
         <div class="flex flex-wrap gap-2">
           {#each quickPrompts as prompt}
@@ -155,7 +206,7 @@
               <div class="max-w-[min(980px,84%)]">
                 <div
                   class={item.role === "user"
-                    ? "rounded-2xl rounded-br-md bg-gray-950 px-4 py-3 text-sm leading-6 text-white shadow-sm"
+                    ? "rounded-2xl rounded-br-md bg-pink-600 px-4 py-3 text-sm leading-6 text-white shadow-sm"
                     : "rounded-2xl rounded-bl-md border border-gray-200 bg-white px-4 py-3 text-sm leading-6 text-gray-800 shadow-sm"}
                 >
                   {item.content}
@@ -195,17 +246,28 @@
                 <Bot class="h-4 w-4" />
               </div>
               <div
-                class="rounded-2xl rounded-bl-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm"
+                class="rounded-2xl rounded-bl-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500 shadow-sm animate-pulse"
               >
-                Reading task context...
+                {loadingTexts[loadingTextIndex]}
               </div>
             </div>
           {/if}
         </div>
       </div>
+      
+      {#if showScrollButton}
+        <button
+          type="button"
+          class="sticky bottom-4 left-1/2 -translate-x-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-700 shadow-md ring-1 ring-gray-200 hover:bg-gray-50 transition-all animate-bounce"
+          on:click={scrollToBottom}
+          aria-label="Scroll to bottom"
+        >
+          <ArrowDown class="h-4 w-4" />
+        </button>
+      {/if}
     </div>
 
-    <footer class="border-t border-gray-100 bg-white px-4 py-4 sm:px-6">
+    <footer class="border-t border-gray-100 bg-white px-4 py-4 sm:px-6 z-10">
       <form
         class="flex w-full items-end gap-3 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm"
         on:submit|preventDefault={sendMessage}
@@ -216,10 +278,16 @@
           placeholder="Ask about tasks, priorities, meetings, or project context..."
           rows="1"
           disabled={isSending}
+          on:keydown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              sendMessage();
+            }
+          }}
         ></textarea>
         <button
           type="submit"
-          class="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-950 text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200"
+          class="mb-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-pink-600 text-white transition-colors hover:bg-pink-700 disabled:cursor-not-allowed disabled:bg-gray-200"
           disabled={!message.trim() || isSending}
           aria-label="Send message"
         >
